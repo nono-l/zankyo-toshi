@@ -1,0 +1,148 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #0c0b0a;
+  --color-surface: #161412;
+  --color-elevated: #1e1c19;
+  --color-fg: #e8e4dc;
+  --color-muted: #9a9388;
+  --color-subtle: #6f6a63;
+  --color-line: color-mix(in oklab, var(--color-fg) 14%, transparent);
+  --color-accent: #c8ccd4;
+  --color-accent-fg: #0c0b0a;
+  --font-display: "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif;
+  --font-sans: "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+}
+
+@layer base {
+  html,
+  body,
+  #app {
+    height: 100%;
+    background: var(--color-bg);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+.game-root {
+  position: relative;
+  width: 100%;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--color-bg);
+  touch-action: none;
+  user-select: none;
+}
+
+.game-root canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+.hud-layer {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.hud-layer .hit {
+  pointer-events: auto;
+}
+
+.panel {
+  background: color-mix(in oklab, var(--color-surface) 88%, transparent);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-xl);
+}
+
+.btn-primary {
+  min-height: 48px;
+  padding: 0 1.25rem;
+  border-radius: var(--radius-md);
+  background: var(--color-accent);
+  color: var(--color-accent-fg);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+.btn-ghost {
+  min-height: 44px;
+  padding: 0 0.9rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-line);
+  color: var(--color-fg);
+  background: color-mix(in oklab, var(--color-elevated) 70%, transparent);
+}
+
+.seed-input {
+  min-height: 44px;
+  width: 100%;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-line);
+  background: var(--color-elevated);
+  color: var(--color-fg);
+  padding: 0 0.85rem;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+
+.stick-base {
+  width: 112px;
+  height: 112px;
+  border-radius: 9999px;
+  border: 1px solid var(--color-line);
+  background: color-mix(in oklab, var(--color-surface) 55%, transparent);
+  position: relative;
+  touch-action: none;
+}
+
+.stick-knob {
+  width: 48px;
+  height: 48px;
+  border-radius: 9999px;
+  background: color-mix(in oklab, var(--color-fg) 80%, transparent);
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    animation: none !important;
+  }
+}
+
+.reveal {
+  animation: rise 500ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
