@@ -5,12 +5,14 @@
 */
 import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { Aperture, BookOpen, Flame, Pause, Play } from "lucide-react";
+import { Aperture, BookOpen, Flame, Pause, Play, SlidersHorizontal } from "lucide-react";
 import { EchoesEngine, type HudState } from "@/game/echoes";
-import { signOut } from "@/lib/auth/client";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { listExploreLogs, recordEmergencyEscape, recordRelicFind, type ExploreLog, type FindInput } from "@/lib/finds";
-import { getProfile, updateProfile } from "@/lib/profile";
+import { getIdentity } from "@/lib/admin";
+import { getProfile } from "@/lib/profile";
+import { getLightSettings, saveLightSettings } from "@/lib/settings";
+import { GhostGallery } from "@/components/ghost-gallery";
 
 const DEFAULT_SEED = "残響-7f3a";
 const SEED_HEAD = ["残響", "灰", "霧", "沈水", "輪郭", "観測", "基壇", "無音", "塩", "錆", "凍土", "夜半"] as const;
@@ -57,8 +59,19 @@ export function EchoesApp() {
   const [pending, setPending] = useState<FindInput[]>([]);
   const [confirmEscape, setConfirmEscape] = useState(false);
   const [leaving, setLeaving] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminTools, setAdminTools] = useState(false);
+  const [savingLight, setSavingLight] = useState(false);
+  const [lightNote, setLightNote] = useState("");
+  const [lightPreview, setLightPreview] = useState<
+    "room" | "lantern" | "fogOff" | "fogOn" | null
+  >(null);
+  const [ghostFarewell, setGhostFarewell] = useState(false);
+  const [ghostGallery, setGhostGallery] = useState(false);
   const pendingRef = useRef<FindInput[]>([]);
   pendingRef.current = pending;
+  const emergencyExitRef = useRef<(reason?: "emergency" | "ghost") => void>(() => {});
+
 
 
   useEffect(() => {
@@ -81,10 +94,20 @@ export function EchoesApp() {
       pendingRef.current = [...pendingRef.current, row];
       setPending(pendingRef.current);
     };
+    engine.onGhostHit = () => {
+      engine.setPaused(true);
+      setGhostFarewell(true);
+      window.setTimeout(() => emergencyExitRef.current("ghost"), 3400);
+    };
+
 
     const off = engine.subscribe(setHud);
+    void getLightSettings()
+      .then((s) => engine.setLook({ room: s.room, lantern: s.lantern, fogOff: s.fogOff, fogOn: s.fogOn }))
+      .catch(() => {});
     return () => {
       engine.onRelicFound = null;
+      engine.onGhostHit = null;
       off();
       engine.dispose();
       engineRef.current = null;
@@ -96,11 +119,16 @@ export function EchoesApp() {
   useEffect(() => {
     if (!user) {
       setLog(null);
+      setIsAdmin(false);
+      setAdminTools(false);
       return;
     }
     void listExploreLogs()
       .then(setLog)
       .catch(() => setLog([]));
+    void getIdentity()
+      .then((me) => setIsAdmin(me.isAdmin))
+      .catch(() => setIsAdmin(false));
   }, [user]);
 
   const begin = () => {
@@ -135,6 +163,8 @@ export function EchoesApp() {
     setPending([]);
     pendingRef.current = [];
     setLeaving(false);
+    setGhostFarewell(false);
+    setGhostGallery(false);
     onStick(0, 0);
   };
 
@@ -154,7 +184,7 @@ export function EchoesApp() {
     void go();
   };
 
-  const emergencyExit = () => {
+  const emergencyExit = (reason: "emergency" | "ghost" = "emergency") => {
     if (leaving) return;
     setLeaving(true);
     const n = pendingRef.current.length;
@@ -167,6 +197,7 @@ export function EchoesApp() {
             civName: e.world.civName,
             landmarkName: e.world.landmarkName,
             confiscated: n,
+            reason,
           },
         }).catch(() => {});
         refreshLog();
@@ -175,7 +206,7 @@ export function EchoesApp() {
     };
     void go();
   };
-
+  emergencyExitRef.current = emergencyExit;
 
   const onStick = (x: number, y: number) => {
     setStick({ x, y });
@@ -222,22 +253,24 @@ export function EchoesApp() {
         )}
         {phase === "title" && (
           <div className="flex h-full flex-col justify-end px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(1.25rem,env(safe-area-inset-top))]">
-            <div className="relative z-10 mb-4 flex items-start justify-between gap-3">
+            <div className="relative z-10 mb-4 flex flex-col gap-2">
+              <div className="flex justify-end">
+                <AuthChip isPending={isPending} user={user} />
+              </div>
               <div className="flex flex-wrap gap-2">
                 <Link
                   to="/guide"
-                  className="btn-ghost hit hit-ui inline-flex h-11 items-center px-4"
+                  className="btn-ghost hit hit-ui inline-flex h-11 shrink-0 items-center whitespace-nowrap px-4"
                 >
                   遊び方
                 </Link>
                 <Link
                   to="/terms"
-                  className="btn-ghost hit hit-ui inline-flex h-11 items-center px-4"
+                  className="btn-ghost hit hit-ui inline-flex h-11 shrink-0 items-center whitespace-nowrap px-4"
                 >
                   配信規約（ビデオポリシー）
                 </Link>
               </div>
-              <AuthChip isPending={isPending} user={user} />
             </div>
 
 
@@ -284,7 +317,7 @@ export function EchoesApp() {
           </div>
         )}
 
-        {phase === "play" && hud && (
+        {phase === "play" && hud && !lightPreview && !ghostFarewell && (
           <>
             <div className="relative z-10 flex items-start justify-between px-4 pt-[max(0.75rem,env(safe-area-inset-top))]">
               <div className="panel px-3 py-2">
@@ -292,6 +325,19 @@ export function EchoesApp() {
                 <p className="text-muted font-mono text-[11px]">{hud.seed}</p>
               </div>
               <div className="flex gap-2">
+                {isAdmin && (
+                  <button
+                    type="button"
+                    className="btn-ghost hit hit-ui grid size-11 place-items-center p-0"
+                    aria-label="管理"
+                    onClick={() => {
+                      engineRef.current?.setPaused(true);
+                      setAdminTools(true);
+                    }}
+                  >
+                    <SlidersHorizontal className="size-4" />
+                  </button>
+                )}
                 <button
                   type="button"
                   className="btn-ghost hit hit-ui grid size-11 place-items-center p-0"
@@ -319,6 +365,13 @@ export function EchoesApp() {
               {hud.toast && (
                 <p className="font-display mt-2 max-w-xs text-sm leading-snug">{hud.toast}</p>
               )}
+              {hud.debug.showPos && (
+                <p className="text-subtle mt-2 font-mono text-xs">
+                  {hud.posX.toFixed(1)}, {hud.posZ.toFixed(1)}
+                  {hud.debug.speed > 1 ? ` · ${hud.debug.speed}倍` : ""}
+                </p>
+              )}
+
               {hud.atPortal && (
                 <button
                   type="button"
@@ -363,7 +416,21 @@ export function EchoesApp() {
         )}
       </div>
 
-      {paused && hud && (
+      {ghostFarewell && (
+        <div className="absolute inset-0 z-30 flex items-end justify-center bg-[color-mix(in_oklab,var(--color-bg)_62%,transparent)] px-5 pb-16">
+          <div className="panel w-full max-w-md p-6">
+            <p className="font-display text-xl leading-relaxed">
+              傘おばけと仲良しになってしまった。
+            </p>
+            <p className="text-muted mt-4 text-sm leading-relaxed">
+              この器は、もうダメです。
+            </p>
+            <p className="text-muted mt-2 text-sm leading-relaxed">緊急脱出します。</p>
+          </div>
+        </div>
+      )}
+
+      {paused && hud && !lightPreview && !ghostFarewell && (
         <div className="absolute inset-0 z-10 flex items-end justify-center bg-[color-mix(in_oklab,var(--color-bg)_55%,transparent)] px-5 pb-10">
           <div className="panel hit w-full max-w-md p-6">
             {confirmEscape ? (
@@ -378,7 +445,7 @@ export function EchoesApp() {
                     type="button"
                     className="btn-primary"
                     disabled={leaving}
-                    onClick={emergencyExit}
+                    onClick={() => emergencyExit()}
                   >
                     緊急脱出する
                   </button>
@@ -404,6 +471,16 @@ export function EchoesApp() {
                     <Play className="size-4" />
                     再開
                   </button>
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      className="btn-ghost inline-flex items-center justify-center gap-2"
+                      onClick={() => setAdminTools(true)}
+                    >
+                      <SlidersHorizontal className="size-4" />
+                      管理
+                    </button>
+                  )}
                   {hud.atPortal ? (
                     <button
                       type="button"
@@ -477,6 +554,288 @@ export function EchoesApp() {
           </div>
         </div>
       )}
+
+      {adminTools && isAdmin && hud && !ghostGallery && (
+        <div
+          className={`absolute inset-0 z-20 flex items-end justify-center px-5 pb-10 ${
+            lightPreview
+              ? "bg-transparent"
+              : "bg-[color-mix(in_oklab,var(--color-bg)_55%,transparent)]"
+          }`}
+        >
+          {lightPreview && (
+            <p className="font-display pointer-events-none absolute top-[max(1.25rem,env(safe-area-inset-top))] left-1/2 z-30 -translate-x-1/2 text-sm tracking-wide">
+              {lightPreview === "room"
+                ? `部屋 ${Math.round(hud.roomBright * 100)}`
+                : lightPreview === "lantern"
+                  ? `灯火 ${Math.round(hud.lanternBright * 100)}`
+                  : lightPreview === "fogOff"
+                    ? `霧（消灯） ${hud.fogOffM.toFixed(1)} m`
+                    : `霧（点灯） ${hud.fogOnM.toFixed(1)} m`}
+            </p>
+          )}
+          <div
+            className={`panel hit max-h-[80dvh] w-full max-w-md overflow-auto p-6 ${
+              lightPreview ? "opacity-0" : ""
+            }`}
+          >
+            <h2 className="font-display text-2xl">管理</h2>
+            <p className="text-muted mt-2 text-sm leading-relaxed">
+              デバッグ用。記録には残らない。権限の付与は入口の管理者頁。
+            </p>
+
+            <p className="text-subtle mt-5 mb-2 text-xs tracking-wider">歩行速度</p>
+            <div className="flex flex-wrap gap-2">
+              {([1, 2, 3, 4, 5] as const).map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  className={hud.debug.speed === n ? "btn-primary px-4" : "btn-ghost px-4"}
+                  aria-pressed={hud.debug.speed === n}
+                  onClick={() => engineRef.current?.setDebug({ speed: n })}
+                >
+                  {n}倍
+                </button>
+              ))}
+            </div>
+
+            <div className="mt-4 flex flex-col gap-2">
+              <button
+                type="button"
+                className={hud.debug.seeAll ? "btn-primary" : "btn-ghost"}
+                aria-pressed={hud.debug.seeAll}
+                onClick={() => engineRef.current?.setDebug({ seeAll: !hud.debug.seeAll })}
+              >
+                何処までも見通す
+              </button>
+              <button
+                type="button"
+                className={hud.debug.flashInstant ? "btn-primary" : "btn-ghost"}
+                aria-pressed={hud.debug.flashInstant}
+                onClick={() => engineRef.current?.setDebug({ flashInstant: !hud.debug.flashInstant })}
+              >
+                測量閃の冷却なし
+              </button>
+              <button
+                type="button"
+                className={hud.debug.noclip ? "btn-primary" : "btn-ghost"}
+                aria-pressed={hud.debug.noclip}
+                onClick={() => engineRef.current?.setDebug({ noclip: !hud.debug.noclip })}
+              >
+                壁を通る
+              </button>
+              <button
+                type="button"
+                className={hud.debug.freeExit ? "btn-primary" : "btn-ghost"}
+                aria-pressed={hud.debug.freeExit}
+                onClick={() => engineRef.current?.setDebug({ freeExit: !hud.debug.freeExit })}
+              >
+                どこからでも通常離脱
+              </button>
+              <button
+                type="button"
+                className={hud.debug.showPos ? "btn-primary" : "btn-ghost"}
+                aria-pressed={hud.debug.showPos}
+                onClick={() => engineRef.current?.setDebug({ showPos: !hud.debug.showPos })}
+              >
+                座標を出す
+              </button>
+            </div>
+
+            <div className="mt-4 flex flex-col gap-2">
+              <button
+                type="button"
+                className="btn-ghost"
+                onClick={() => engineRef.current?.teleportTo("portal")}
+              >
+                入口へ移動
+              </button>
+              <button
+                type="button"
+                className="btn-ghost"
+                onClick={() => engineRef.current?.teleportTo("landmark")}
+              >
+                核へ移動
+              </button>
+              <button
+                type="button"
+                className="btn-ghost"
+                onClick={() => engineRef.current?.markAllRelicsRead()}
+              >
+                断片をすべて既読
+              </button>
+              <Link to="/admin" className="btn-ghost flex items-center justify-center">
+                権限の付与
+              </Link>
+              <button
+                type="button"
+                className="btn-ghost"
+                onClick={() => setGhostGallery(true)}
+              >
+                おばけギャラリー
+              </button>
+            </div>
+
+            <h3 className="font-display mt-8 text-lg">ゲーム設定</h3>
+            <p className="text-muted mt-2 text-sm leading-relaxed">
+              部屋の環境光、灯火の強さ、霧が切れる距離。保存すると全員が同じ規格になる。
+            </p>
+            <label className="text-subtle mt-4 mb-1 block text-xs tracking-wider">
+              部屋の明るさ {Math.round(hud.roomBright * 100)}
+            </label>
+            <input
+              className="light-slider hit"
+              type="range"
+              min={0}
+              max={500}
+              step={1}
+              value={Math.round(hud.roomBright * 100)}
+              aria-label="部屋の明るさ"
+              onPointerDown={(e) => {
+                e.currentTarget.setPointerCapture(e.pointerId);
+                setLightPreview("room");
+                engineRef.current?.setLook({}, "room");
+              }}
+              onPointerUp={() => setLightPreview(null)}
+              onPointerCancel={() => setLightPreview(null)}
+              onLostPointerCapture={() => setLightPreview(null)}
+              onInput={(e) =>
+                engineRef.current?.setLook({ room: Number(e.currentTarget.value) / 100 }, "room")
+              }
+              onChange={(e) =>
+                engineRef.current?.setLook({ room: Number(e.currentTarget.value) / 100 }, "room")
+              }
+            />
+            <label className="text-subtle mt-4 mb-1 block text-xs tracking-wider">
+              灯火の明るさ {Math.round(hud.lanternBright * 100)}
+            </label>
+            <input
+              className="light-slider hit"
+              type="range"
+              min={0}
+              max={500}
+              step={1}
+              value={Math.round(hud.lanternBright * 100)}
+              aria-label="灯火の明るさ"
+              onPointerDown={(e) => {
+                e.currentTarget.setPointerCapture(e.pointerId);
+                setLightPreview("lantern");
+                engineRef.current?.setLook({}, "lantern");
+              }}
+              onPointerUp={() => setLightPreview(null)}
+              onPointerCancel={() => setLightPreview(null)}
+              onLostPointerCapture={() => setLightPreview(null)}
+              onInput={(e) =>
+                engineRef.current?.setLook(
+                  { lantern: Number(e.currentTarget.value) / 100 },
+                  "lantern",
+                )
+              }
+              onChange={(e) =>
+                engineRef.current?.setLook(
+                  { lantern: Number(e.currentTarget.value) / 100 },
+                  "lantern",
+                )
+              }
+            />
+            <label className="text-subtle mt-4 mb-1 block text-xs tracking-wider">
+              霧（消灯） {hud.fogOffM.toFixed(1)} m
+            </label>
+            <input
+              className="light-slider hit"
+              type="range"
+              min={1}
+              max={25}
+              step={0.5}
+              value={hud.fogOffM}
+              aria-label="霧の距離（消灯）"
+              onPointerDown={(e) => {
+                e.currentTarget.setPointerCapture(e.pointerId);
+                setLightPreview("fogOff");
+                engineRef.current?.setLook({}, "fogOff");
+              }}
+              onPointerUp={() => setLightPreview(null)}
+              onPointerCancel={() => setLightPreview(null)}
+              onLostPointerCapture={() => setLightPreview(null)}
+              onInput={(e) =>
+                engineRef.current?.setLook({ fogOff: Number(e.currentTarget.value) }, "fogOff")
+              }
+              onChange={(e) =>
+                engineRef.current?.setLook({ fogOff: Number(e.currentTarget.value) }, "fogOff")
+              }
+            />
+            <label className="text-subtle mt-4 mb-1 block text-xs tracking-wider">
+              霧（点灯） {hud.fogOnM.toFixed(1)} m
+            </label>
+            <input
+              className="light-slider hit"
+              type="range"
+              min={4}
+              max={80}
+              step={0.5}
+              value={hud.fogOnM}
+              aria-label="霧の距離（点灯）"
+              onPointerDown={(e) => {
+                e.currentTarget.setPointerCapture(e.pointerId);
+                setLightPreview("fogOn");
+                engineRef.current?.setLook({}, "fogOn");
+              }}
+              onPointerUp={() => setLightPreview(null)}
+              onPointerCancel={() => setLightPreview(null)}
+              onLostPointerCapture={() => setLightPreview(null)}
+              onInput={(e) =>
+                engineRef.current?.setLook({ fogOn: Number(e.currentTarget.value) }, "fogOn")
+              }
+              onChange={(e) =>
+                engineRef.current?.setLook({ fogOn: Number(e.currentTarget.value) }, "fogOn")
+              }
+            />
+            <button
+              type="button"
+              className="btn-primary mt-4 w-full"
+              disabled={savingLight}
+              onClick={() => {
+                setSavingLight(true);
+                setLightNote("");
+                void saveLightSettings({
+                  data: {
+                    room: hud.roomBright,
+                    lantern: hud.lanternBright,
+                    fogOff: hud.fogOffM,
+                    fogOn: hud.fogOnM,
+                  },
+                })
+                  .then((res) => {
+                    setLightNote(res.ok ? "全員の規格として残した。" : "保存できなかった。");
+                  })
+                  .catch(() => setLightNote("保存できなかった。"))
+                  .finally(() => setSavingLight(false));
+              }}
+            >
+              {savingLight ? "保存中" : "設定を保存"}
+            </button>
+            {lightNote ? <p className="text-muted mt-2 text-sm">{lightNote}</p> : null}
+
+            <button
+              type="button"
+              className="btn-primary mt-5 w-full"
+              onClick={() => {
+                setAdminTools(false);
+                setGhostGallery(false);
+                engineRef.current?.setPaused(false);
+              }}
+            >
+              閉じる
+            </button>
+          </div>
+        </div>
+      )}
+
+      {ghostGallery && isAdmin && (
+        <GhostGallery
+          onClose={() => setGhostGallery(false)}
+        />
+      )}
     </div>
   );
 }
@@ -488,16 +847,11 @@ function AuthChip({
   isPending: boolean;
   user: ReturnType<typeof useCurrentUserState>["user"];
 }) {
-  const [signingOut, setSigningOut] = useState(false);
   const [name, setName] = useState<string | null>(null);
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState("");
-  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!user) {
       setName(null);
-      setEditing(false);
       return;
     }
     void getProfile()
@@ -518,73 +872,17 @@ function AuthChip({
 
   const label = name || user.displayName || user.primaryEmail || "連携中";
 
-  const save = () => {
-    const next = draft.replace(/\s+/g, " ").trim().slice(0, 24);
-    if (!next || saving) return;
-    setSaving(true);
-    void updateProfile({ data: { displayName: next } })
-      .then((res) => {
-        if (res.ok) setName(res.displayName);
-        setEditing(false);
-      })
-      .catch(() => {})
-      .finally(() => setSaving(false));
-  };
-
-  if (editing) {
-    return (
-      <div className="panel hit w-[min(100%,18rem)] p-3">
-        <label className="text-subtle mb-1 block text-xs tracking-wider">プロフ名</label>
-        <input
-          className="seed-input"
-          value={draft}
-          maxLength={24}
-          autoComplete="nickname"
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") save();
-            if (e.key === "Escape") setEditing(false);
-          }}
-        />
-        <div className="mt-2 flex gap-2">
-          <button type="button" className="btn-primary flex-1" disabled={saving} onClick={save}>
-            {saving ? "保存中" : "保存"}
-          </button>
-          <button type="button" className="btn-ghost flex-1" onClick={() => setEditing(false)}>
-            閉じる
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="panel hit flex items-center gap-2 px-3 py-2">
-      <span className="max-w-[8rem] truncate text-sm">{label}</span>
-      <button
-        type="button"
-        className="text-subtle text-xs underline-offset-4 hover:underline"
-        onClick={() => {
-          setDraft(label === "連携中" ? "" : label);
-          setEditing(true);
-        }}
-      >
-        変更
-      </button>
-      <button
-        type="button"
-        className="text-subtle text-xs underline-offset-4 hover:underline disabled:opacity-50"
-        disabled={signingOut}
-        onClick={() => {
-          setSigningOut(true);
-          void signOut().catch(() => setSigningOut(false));
-        }}
-      >
-        {signingOut ? "解除中" : "解除"}
-      </button>
-    </div>
+    <Link
+      to="/profile"
+      className="panel hit hit-ui inline-flex max-w-[14rem] items-center px-4 py-2"
+    >
+      <span className="truncate text-sm">{label}</span>
+    </Link>
   );
 }
+
+
 
 
 function Joystick({

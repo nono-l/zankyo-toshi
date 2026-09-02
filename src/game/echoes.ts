@@ -7,8 +7,19 @@
 // @ts-nocheck
 import * as THREE from "three";
 import { generateRuin, isWalk, worldToCell, SIZE, CELL, type Relic, type RuinWorld } from "./gen";
+import { createKasaObake } from "./ghosts";
+import { createSoul, tickSoul, type SoulFx } from "./hitodama";
 import { Input } from "./input";
 import { RuinAudio } from "./audio";
+
+export type DebugState = {
+  speed: number;
+  seeAll: boolean;
+  flashInstant: boolean;
+  noclip: boolean;
+  showPos: boolean;
+  freeExit: boolean;
+};
 
 export type HudState = {
   seed: string;
@@ -27,18 +38,36 @@ export type HudState = {
   flashCd: number;
   flashing: boolean;
   paused: boolean;
+  debug: DebugState;
+  posX: number;
+  posZ: number;
+  roomBright: number;
+  lanternBright: number;
+  fogOffM: number;
+  fogOnM: number;
 };
+
+
+
 
 type Listener = (s: HudState) => void;
 
 const EYE = 1.64;
 const WALK = 3.15;
 const SPRINT = 4.85;
+const GHOST_SPEED = 3.7;
+const GHOST_HIT = 1.12;
 const LOOK = 0.00235;
 const PORTAL_R = 1.9;
 const FLASH_DUR = 1;
 const FLASH_CD = 60;
 const FLASH_FAR = 80;
+const FOG_OFF = 6.2;
+const FOG_ON = 20.5;
+const ROOM_DEFAULT = 0.28;
+const LANTERN_DEFAULT = 0.48;
+
+
 
 
 
@@ -75,6 +104,22 @@ export class EchoesEngine {
   private lanternOn = true;
   private flashT = 0;
   private flashCd = 0;
+  private roomBright = ROOM_DEFAULT;
+  private lanternBright = LANTERN_DEFAULT;
+  private fogOffM = FOG_OFF;
+  private fogOnM = FOG_ON;
+
+
+
+  debug: DebugState = {
+    speed: 1,
+    seeAll: false,
+    flashInstant: false,
+    noclip: false,
+    showPos: false,
+    freeExit: false,
+  };
+
 
   private paused = false;
   private found = new Set<number>();
@@ -101,6 +146,14 @@ export class EchoesEngine {
   private localP = new THREE.Vector3();
   private localD = new THREE.Vector3();
   private portalSpin: THREE.Object3D | null = null;
+  private ghost: THREE.Object3D | null = null;
+  private ghostLight: THREE.PointLight | null = null;
+  private railMesh: THREE.Object3D | null = null;
+  private railCurve: THREE.Curve<THREE.Vector3> | null = null;
+  private railLen = 1;
+  private ghostU = 0.38;
+  private ghostHit = false;
+  private souls: SoulFx[] = [];
   portalX = 0;
   portalZ = 0;
 
@@ -117,6 +170,8 @@ export class EchoesEngine {
     x: number;
     z: number;
   }) => void) | null = null;
+  onGhostHit: (() => void) | null = null;
+
 
 
   constructor(canvas: HTMLCanvasElement, seed: string) {
@@ -186,14 +241,22 @@ export class EchoesEngine {
       nearRelic: null,
       toast: this.toast,
       atLandmark: false,
-      atPortal: Math.hypot(px - this.portalX, pz - this.portalZ) < PORTAL_R,
+      atPortal: Math.hypot(px - this.portalX, pz - this.portalZ) < PORTAL_R || this.debug.freeExit,
       complete: this.found.size >= this.world.relics.length,
       lantern: this.lanternOn,
       flashCd: Math.ceil(this.flashCd),
       flashing: this.flashT > 0,
       paused: this.paused,
+      debug: { ...this.debug },
+      posX: px,
+      posZ: pz,
+      roomBright: this.roomBright,
+      lanternBright: this.lanternBright,
+      fogOffM: this.fogOffM,
+      fogOnM: this.fogOnM,
     };
   }
+
 
 
   private emit() {
@@ -215,6 +278,8 @@ export class EchoesEngine {
     this.placePlayer(false);
     this.flashT = 0;
     this.flashCd = 0;
+    this.ghostHit = false;
+    this.ghostU = 0.38;
     this.applyAtmosphere();
     this.toast = "入口の光に触れれば、通常に戻れる";
     this.toastT = 4.5;
@@ -237,6 +302,56 @@ export class EchoesEngine {
     this.emit();
   }
 
+  setDebug(patch: Partial<DebugState>) {
+    // セッション限り。記録や権限表には書かない。
+    if (patch.speed != null) {
+      this.debug.speed = Math.max(1, Math.min(5, Math.round(patch.speed)));
+    }
+    if (patch.seeAll != null) this.debug.seeAll = patch.seeAll;
+    if (patch.flashInstant != null) this.debug.flashInstant = patch.flashInstant;
+    if (patch.noclip != null) this.debug.noclip = patch.noclip;
+    if (patch.showPos != null) this.debug.showPos = patch.showPos;
+    if (patch.freeExit != null) this.debug.freeExit = patch.freeExit;
+    if (this.debug.flashInstant) this.flashCd = 0;
+    this.applyAtmosphere();
+    this.emit();
+  }
+
+  teleportTo(kind: "portal" | "landmark") {
+    const x = kind === "portal" ? this.portalX : this.world.landmark.cx;
+    const z = kind === "portal" ? this.portalZ : this.world.landmark.cz;
+    this.yawObj.position.set(x, this.surfaceY(x, z) + EYE, z);
+    this.vx = 0;
+    this.vz = 0;
+    this.emit();
+  }
+
+  markAllRelicsRead() {
+    // onRelicFound は呼ばない。本番の拾得ログを汚さない。
+    for (const r of this.world.relics) this.found.add(r.id);
+    this.toast = "デバッグ：断片を既読にした";
+    this.toastT = 2.4;
+    this.emit();
+  }
+
+  setLook(
+    patch: { room?: number; lantern?: number; fogOff?: number; fogOn?: number },
+    preview?: "room" | "lantern" | "fogOff" | "fogOn",
+  ) {
+    if (patch.room != null) this.roomBright = Math.min(5, Math.max(0, patch.room));
+    if (patch.lantern != null) this.lanternBright = Math.min(5, Math.max(0, patch.lantern));
+    if (patch.fogOff != null) this.fogOffM = Math.min(25, Math.max(1, patch.fogOff));
+    if (patch.fogOn != null) this.fogOnM = Math.min(80, Math.max(4, patch.fogOn));
+    if (preview === "room" || preview === "fogOff") this.lanternOn = false;
+    if (preview === "lantern" || preview === "fogOn") this.lanternOn = true;
+    if (this.debug.seeAll) this.debug.seeAll = false;
+    this.applyAtmosphere();
+    this.renderer.render(this.scene, this.camera);
+    this.emit();
+  }
+
+
+
   toggleLantern() {
     this.lanternOn = !this.lanternOn;
     if (this.flashT <= 0) this.applyAtmosphere();
@@ -247,7 +362,7 @@ export class EchoesEngine {
     if (this.mode !== "play" || this.flashCd > 0 || this.flashT > 0) return;
     // 冷却は撃った瞬間から 60 秒。持続 1 秒を足して 61 にはしない。
     this.flashT = FLASH_DUR;
-    this.flashCd = FLASH_CD;
+    this.flashCd = this.debug.flashInstant ? 0 : FLASH_CD;
     this.audio.flash();
     this.toast = "測量の閃光";
     this.toastT = 1.15;
@@ -274,6 +389,19 @@ export class EchoesEngine {
     }
     this.scene.background = new THREE.Color(0x0b0908);
     this.renderer.setClearColor(0x0b0908, 1);
+    if (this.debug.seeAll) {
+      this.renderer.toneMappingExposure = 1.05;
+      this.hemi.intensity = 0.88;
+      this.sun.intensity = 0.75;
+      this.scene.fog = new THREE.Fog(0x1c1916, 80, 280);
+      this.scene.background = new THREE.Color(0x1c1916);
+      this.lantern.intensity = 0.4;
+      this.lantern.distance = 12;
+      this.camera.near = 0.08;
+      this.camera.far = 320;
+      this.camera.updateProjectionMatrix();
+      return;
+    }
     if (this.flashT > 0) {
       this.renderer.toneMappingExposure = 1.12;
       this.hemi.intensity = 0.62;
@@ -289,26 +417,29 @@ export class EchoesEngine {
       this.camera.updateProjectionMatrix();
       return;
     }
-    this.renderer.toneMappingExposure = 0.88;
+    this.renderer.toneMappingExposure = 0.72 + this.roomBright * 0.35;
     this.camera.near = 0.08;
-    this.camera.far = 28;
+    this.camera.far = Math.max(28, this.fogOnM + 10);
     this.camera.updateProjectionMatrix();
-    // 消灯 6m / 点灯 20m。1m は足元しか見えず捨てた。
+    const room = this.roomBright;
+    const flame = this.lanternBright;
+    const offM = this.fogOffM;
+    const onM = this.fogOnM;
     if (this.lanternOn) {
-      this.hemi.intensity = 0.12;
-      this.sun.intensity = 0.04;
-      this.scene.fog = new THREE.Fog(0x0b0908, 8, 20.5);
+      this.hemi.intensity = 0.04 + room * 0.55;
+      this.sun.intensity = room * 0.22;
+      this.scene.fog = new THREE.Fog(0x0b0908, onM * 0.39, onM);
       this.lantern.color.setHex(0xffe2b8);
-      this.lantern.intensity = 4.2;
-      this.lantern.distance = 20.5;
+      this.lantern.intensity = 0.4 + flame * 9.2;
+      this.lantern.distance = onM;
       this.lantern.decay = 1.45;
     } else {
-      this.hemi.intensity = 0.22;
-      this.sun.intensity = 0.06;
-      this.scene.fog = new THREE.Fog(0x0b0908, 2.2, 6.2);
+      this.hemi.intensity = 0.03 + room * 0.95;
+      this.sun.intensity = room * 0.65;
+      this.scene.fog = new THREE.Fog(0x0b0908, offM * 0.35, offM);
       this.lantern.color.setHex(0xffd4a0);
-      this.lantern.intensity = 0.18;
-      this.lantern.distance = 2.2;
+      this.lantern.intensity = 0.12 + flame * 0.2;
+      this.lantern.distance = Math.min(3, offM * 0.4);
       this.lantern.decay = 2;
     }
   }
@@ -322,6 +453,12 @@ export class EchoesEngine {
       this.disposeObject(ch);
     }
     this.relicMeshes = [];
+    this.ghost = null;
+    this.ghostLight = null;
+    this.railMesh = null;
+    this.railCurve = null;
+    this.ghostHit = false;
+    this.souls = [];
     this.found.clear();
     this.world = generateRuin(seed);
     this.hemi = new THREE.HemisphereLight(0xc9d2d4, 0x3a3228, 0.72);
@@ -350,6 +487,7 @@ export class EchoesEngine {
     this.solids = [];
     this.ramps = [];
     this.portalSpin = null;
+    this.souls = [];
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(520, 520),
       new THREE.MeshStandardMaterial({ color: 0x2a2622, roughness: 1 }),
@@ -492,6 +630,8 @@ export class EchoesEngine {
     this.addRelics();
     this.addDebris();
     this.addPortal();
+    this.addGhost();
+    this.addHitodama();
   }
 
 
@@ -637,6 +777,94 @@ export class EchoesEngine {
     this.portalSpin = ring;
   }
 
+  private addGhost() {
+    const pts = this.world.rail;
+    this.ghost = null;
+    this.railMesh = null;
+    this.ghostLight = null;
+    this.railCurve = null;
+    if (pts.length < 8) return;
+    const vecs = pts.map((p) => new THREE.Vector3(p.x, 0.12, p.z));
+    const curve = new THREE.CatmullRomCurve3(vecs, true, "catmullrom", 0.15);
+    this.railCurve = curve;
+    this.railLen = Math.max(8, curve.getLength());
+
+    const tube = new THREE.TubeGeometry(curve, Math.min(180, pts.length * 4), 0.045, 5, true);
+    const railMat = new THREE.MeshBasicMaterial({
+      color: 0x5ec4ff,
+      transparent: true,
+      opacity: 0.72,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    const rail = new THREE.Mesh(tube, railMat);
+    rail.visible = false;
+    this.scene.add(rail);
+    this.railMesh = rail;
+
+    const g = createKasaObake();
+    const lamp = g.getObjectByName("ghostLamp");
+    this.ghostLight = lamp instanceof THREE.PointLight ? lamp : null;
+    if (this.ghostLight) this.ghostLight.visible = false;
+    this.scene.add(g);
+    this.ghost = g;
+    this.placeGhost();
+  }
+
+  private addHitodama() {
+    this.souls = [];
+    for (const s of this.world.hitodama) {
+      const fx = createSoul(s.color, (s.x + s.z) * 0.13);
+      fx.group.position.set(s.x, fx.baseY, s.z);
+      this.scene.add(fx.group);
+      this.souls.push(fx);
+    }
+  }
+
+  private tickSouls(now: number) {
+    const t = now * 0.001;
+    const cam = this.mode === "play" ? this.yawObj.position : null;
+    for (const fx of this.souls) tickSoul(fx, t, cam);
+  }
+
+  private placeGhost() {
+    if (!this.ghost || !this.railCurve) return;
+    const u = ((this.ghostU % 1) + 1) % 1;
+    const p = this.railCurve.getPointAt(u);
+    const t = this.railCurve.getTangentAt(u);
+    const hop = Math.abs(Math.sin(this.ghostU * this.railLen * 2.4)) * 0.14;
+    this.ghost.position.set(p.x, this.surfaceY(p.x, p.z) + hop, p.z);
+    this.ghost.rotation.y = Math.atan2(t.x, t.z);
+    this.ghost.rotation.z = Math.sin(this.ghostU * this.railLen * 2.4) * 0.12;
+  }
+
+  private tickGhost(dt: number) {
+    if (!this.ghost || !this.railCurve) return;
+    this.ghostU += (GHOST_SPEED * dt) / this.railLen;
+    this.placeGhost();
+    if (this.mode !== "play" || this.paused || this.ghostHit || this.debug.noclip) return;
+    const p = this.yawObj.position;
+    const g = this.ghost.position;
+    const d = Math.hypot(p.x - g.x, p.z - g.z);
+    if (d < 3.2 && this.toastT <= 0) {
+      this.toast = "傘が近い";
+      this.toastT = 1.1;
+    }
+    if (d < GHOST_HIT) {
+      this.ghostHit = true;
+      this.toast = null;
+      this.emit();
+      this.onGhostHit?.();
+    }
+
+  }
+
+  private syncRailGlow() {
+    // 経路は消灯時だけ蒼い。灯は規格であり、おばけのレールは闇の側の印。
+    const glow = this.mode === "play" && !this.lanternOn && this.flashT <= 0;
+    if (this.railMesh) this.railMesh.visible = glow;
+    if (this.ghostLight) this.ghostLight.visible = glow;
+  }
 
   private placePlayer(orbit: boolean) {
     const dx = this.world.landmark.cx - this.world.spawnX;
@@ -653,6 +881,7 @@ export class EchoesEngine {
   }
 
   private walkableWorld(x: number, z: number, r = 0.36) {
+    if (this.debug.noclip) return true;
     const feet = this.yawObj.position.y - EYE;
     const onRamp = this.rampSurface(x, z);
     if (onRamp == null) {
@@ -749,6 +978,11 @@ export class EchoesEngine {
     }
     if (this.mode === "play") this.tickFlash(dt);
     if (this.portalSpin) this.portalSpin.rotation.z += dt * 0.35;
+    this.tickGhost(dt);
+    this.syncRailGlow();
+    this.tickSouls(now);
+
+
 
 
 
@@ -785,7 +1019,7 @@ export class EchoesEngine {
     this.pitchObj.rotation.set(this.pitch, 0, 0);
 
     const sprint = this.input.keys.has("ShiftLeft") || this.input.keys.has("ShiftRight") || Math.hypot(a.moveX, a.moveY) > 0.92;
-    const max = sprint ? SPRINT : WALK;
+    const max = (sprint ? SPRINT : WALK) * this.debug.speed;
     const fx = -Math.sin(this.yaw);
     const fz = -Math.cos(this.yaw);
     const rx = Math.cos(this.yaw);
@@ -848,7 +1082,8 @@ export class EchoesEngine {
     const atLm =
       Math.hypot(p.x - this.world.landmark.cx, p.z - this.world.landmark.cz) <
       Math.max(4, Math.min(this.world.landmark.w, this.world.landmark.d) * 0.25);
-    const atPortal = Math.hypot(p.x - this.portalX, p.z - this.portalZ) < PORTAL_R;
+    const atPortal =
+      Math.hypot(p.x - this.portalX, p.z - this.portalZ) < PORTAL_R || this.debug.freeExit;
 
     if (this.toastT > 0) {
       this.toastT -= dt;
@@ -869,7 +1104,9 @@ export class EchoesEngine {
       found: this.found.size,
       toast: this.toast,
     };
-    const sig = `${next.found}|${next.toast}|${next.atLandmark}|${next.atPortal}|${next.paused}|${next.lantern}|${next.flashing}|${next.flashCd}|${next.foundIds.join(",")}`;
+    const sig = `${next.found}|${next.toast}|${next.atLandmark}|${next.atPortal}|${next.paused}|${next.lantern}|${next.flashing}|${next.flashCd}|${next.roomBright}|${next.lanternBright}|${next.fogOffM}|${next.fogOnM}|${next.debug.speed}|${Number(next.debug.seeAll)}|${Number(next.debug.flashInstant)}|${Number(next.debug.noclip)}|${Number(next.debug.showPos)}|${Number(next.debug.freeExit)}|${next.foundIds.join(",")}`;
+
+
 
     if (sig !== this.lastHudSig) {
       this.lastHudSig = sig;
@@ -888,6 +1125,7 @@ export class EchoesEngine {
         dirty = true;
       }
     }
+    if (this.debug.flashInstant && this.flashCd > 0) this.flashCd = 0;
     if (this.flashCd > 0) {
       const before = Math.ceil(this.flashCd);
       this.flashCd = Math.max(0, this.flashCd - dt);
@@ -895,7 +1133,9 @@ export class EchoesEngine {
     }
     if (!dirty) return;
     const next = this.makeHud();
-    const sig = `${next.found}|${next.toast}|${next.atLandmark}|${next.atPortal}|${next.paused}|${next.lantern}|${next.flashing}|${next.flashCd}|${next.foundIds.join(",")}`;
+    const sig = `${next.found}|${next.toast}|${next.atLandmark}|${next.atPortal}|${next.paused}|${next.lantern}|${next.flashing}|${next.flashCd}|${next.roomBright}|${next.lanternBright}|${next.fogOffM}|${next.fogOnM}|${next.debug.speed}|${Number(next.debug.seeAll)}|${Number(next.debug.flashInstant)}|${Number(next.debug.noclip)}|${Number(next.debug.showPos)}|${Number(next.debug.freeExit)}|${next.foundIds.join(",")}`;
+
+
     if (sig === this.lastHudSig) return;
     this.lastHudSig = sig;
     this.hud = next;

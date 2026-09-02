@@ -10,14 +10,21 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AdminRouteImport } from './routes/admin'
 import { Route as GuideRouteImport } from './routes/guide'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
 const GuideRoute = GuideRouteImport.update({
@@ -28,6 +35,11 @@ const GuideRoute = GuideRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProfileRoute = ProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TermsRoute = TermsRouteImport.update({
@@ -43,38 +55,56 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
   '/guide': typeof GuideRoute
   '/login': typeof LoginRoute
+  '/profile': typeof ProfileRoute
   '/terms': typeof TermsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
   '/guide': typeof GuideRoute
   '/login': typeof LoginRoute
+  '/profile': typeof ProfileRoute
   '/terms': typeof TermsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
   '/guide': typeof GuideRoute
   '/login': typeof LoginRoute
+  '/profile': typeof ProfileRoute
   '/terms': typeof TermsRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/guide' | '/login' | '/terms' | '/api/auth/$'
+  fullPaths:
+    '/' | '/admin' | '/guide' | '/login' | '/profile' | '/terms' | '/api/auth/$'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/guide' | '/login' | '/terms' | '/api/auth/$'
-  id: '__root__' | '/' | '/guide' | '/login' | '/terms' | '/api/auth/$'
+  to:
+    '/' | '/admin' | '/guide' | '/login' | '/profile' | '/terms' | '/api/auth/$'
+  id:
+    | '__root__'
+    | '/'
+    | '/admin'
+    | '/guide'
+    | '/login'
+    | '/profile'
+    | '/terms'
+    | '/api/auth/$'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AdminRoute: typeof AdminRoute
   GuideRoute: typeof GuideRoute
   LoginRoute: typeof LoginRoute
+  ProfileRoute: typeof ProfileRoute
   TermsRoute: typeof TermsRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
@@ -86,6 +116,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/guide': {
@@ -100,6 +137,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/profile': {
+      id: '/profile'
+      path: '/profile'
+      fullPath: '/profile'
+      preLoaderRoute: typeof ProfileRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/terms': {
@@ -121,8 +165,10 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AdminRoute: AdminRoute,
   GuideRoute: GuideRoute,
   LoginRoute: LoginRoute,
+  ProfileRoute: ProfileRoute,
   TermsRoute: TermsRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }

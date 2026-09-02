@@ -19,13 +19,24 @@
 - `src/game/words.ts` … 語彙と名前の組み立て。地形は持たない
 - `src/game/gen.ts` … 部屋・廊・崩壊・スポーン。語の中身は words.ts
 - `src/game/echoes.ts` … Three.js の歩行・霧・衝突・閃光。HUD は持たない
+- `src/game/ghosts.ts` … おばけの形。ギャラリーと本番で同じ
+- `src/game/hitodama.ts` … 人魂の炎。罰なし。色はゲーミング
+
+
 - `src/game/input.ts` … キー・スティック・ゲームパッドのサンプリングだけ
 - `src/game/audio.ts` … 足音・拾得・閃光。見た目は持たない
 - `src/game/rng.ts` … シード乱数
 - `src/components/echoes-app.tsx` … 入口・HUD・離脱。WebGL は engine に委譲
 - `src/lib/finds.ts` … 拾得の commit と緊急脱出ログ
 - `src/lib/profile.ts` … プロフ名。OAuth の name を上書きしないための別表
-- `src/routes/guide.tsx` … 遊び方（滅び方の読み方）
+- `src/lib/admin.ts` … 管理者。ビルトインは touko5536@gmail.com。付与は ID のみ
+- `src/lib/settings.ts` … 部屋・灯火の明るさと霧の距離。全員共通。書くのは管理者だけ
+
+
+
+
+- `src/routes/profile.tsx` … 名と ID。入口のチップでは書かない
+
 - `src/routes/terms.tsx` … 配信規約（ビデオポリシー）
 - `migrations/` … 適用済みは編集しない
 

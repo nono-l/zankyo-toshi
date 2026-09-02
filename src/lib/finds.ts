@@ -23,13 +23,14 @@ export type RelicFind = {
 export type ExploreLog = {
   id: string;
   at: string;
-  kind: "find" | "escape";
+  kind: "find" | "escape" | "ghost";
   seed: string;
   civName: string;
   landmarkName: string;
   placeLabel: string;
   title: string;
 };
+
 
 export type FindInput = {
   seed: string;
@@ -90,27 +91,38 @@ export const recordEmergencyEscape = createServerFn({ method: "POST" })
     civName: string;
     landmarkName: string;
     confiscated: number;
+    reason?: string;
   }) => ({
     seed: clip(String(raw?.seed ?? ""), 80),
     civName: clip(String(raw?.civName ?? ""), 80),
     landmarkName: clip(String(raw?.landmarkName ?? ""), 80),
     confiscated: Math.max(0, Math.min(20, Number(raw?.confiscated) || 0)),
+    reason: raw?.reason === "ghost" ? "ghost" : "emergency",
   }))
   .handler(async ({ context, data }) => {
     if (!data.seed) return { ok: false as const };
     const sql = await getSql();
     const n = data.confiscated;
-    const place = n > 0 ? `${n}個の断片を没収` : "拾得なし";
+    const place =
+      data.reason === "ghost"
+        ? n > 0
+          ? `器の棄却 · ${n}個没収`
+          : "器の棄却"
+
+        : n > 0
+          ? `${n}個の断片を没収`
+          : "拾得なし";
     await sql`
       insert into escape_logs (
-        user_id, seed, civ_name, landmark_name, place_label, confiscated
+        user_id, seed, civ_name, landmark_name, place_label, confiscated, reason
       ) values (
         ${context.userId}, ${data.seed}, ${data.civName}, ${data.landmarkName},
-        ${place}, ${n}
+        ${place}, ${n}, ${data.reason}
       )
     `;
     return { ok: true as const };
   });
+
 
 export const listExploreLogs = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
@@ -139,8 +151,9 @@ export const listExploreLogs = createServerFn({ method: "GET" })
       landmark_name: string;
       place_label: string;
       confiscated: number;
+      reason: string | null;
     }>`
-      select id, escaped_at, seed, civ_name, landmark_name, place_label, confiscated
+      select id, escaped_at, seed, civ_name, landmark_name, place_label, confiscated, reason
       from escape_logs
       where user_id = ${context.userId}
       order by escaped_at desc
@@ -159,19 +172,21 @@ export const listExploreLogs = createServerFn({ method: "GET" })
           title: r.relic_title,
         }),
       ),
-      ...escapes.map(
-        (r): ExploreLog => ({
+      ...escapes.map((r): ExploreLog => {
+        const ghost = r.reason === "ghost";
+        return {
           id: `e-${r.id}`,
           at: asIso(r.escaped_at),
-          kind: "escape",
+          kind: ghost ? "ghost" : "escape",
           seed: r.seed,
           civName: r.civ_name,
           landmarkName: r.landmark_name,
           placeLabel: r.place_label,
-          title: "緊急脱出",
-        }),
-      ),
+          title: ghost ? "器の棄却" : "緊急脱出",
+        };
+      }),
     ];
+
     rows.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
     return rows.slice(0, 100);
   });

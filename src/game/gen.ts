@@ -14,6 +14,7 @@ import {
   REL_BODIES,
   type LandmarkKind,
 } from "./words";
+import { GAMING_COLORS } from "./hitodama";
 
 export type { LandmarkKind };
 
@@ -56,7 +57,10 @@ export type RuinWorld = {
   landmarkKind: LandmarkKind;
   landmark: { cx: number; cz: number; w: number; d: number };
   style: "stone" | "concrete" | "mixed";
+  rail: { x: number; z: number }[];
+  hitodama: { x: number; z: number; color: number }[];
 };
+
 
 function idx(x: number, z: number) {
   return z * SIZE + x;
@@ -100,6 +104,103 @@ function carveHall(
     if (inBounds(x, z + k)) walk[idx(x, z + k)] = 1;
     if (inBounds(x + k, z)) walk[idx(x + k, z)] = 1;
   }
+}
+
+function bfsPath(
+  walk: Uint8Array,
+  x0: number,
+  z0: number,
+  x1: number,
+  z1: number,
+): { i: number; j: number }[] {
+  const start = idx(x0, z0);
+  const goal = idx(x1, z1);
+  if (!walk[start] || !walk[goal]) return [];
+  const prev = new Int32Array(SIZE * SIZE).fill(-1);
+  const q = [start];
+  prev[start] = start;
+  let qi = 0;
+  while (qi < q.length) {
+    const cur = q[qi++]!;
+    if (cur === goal) break;
+    const x = cur % SIZE;
+    const z = (cur / SIZE) | 0;
+    for (const [nx, nz] of [
+      [x + 1, z],
+      [x - 1, z],
+      [x, z + 1],
+      [x, z - 1],
+    ] as const) {
+      if (!inBounds(nx, nz)) continue;
+      const ni = idx(nx, nz);
+      if (prev[ni] >= 0 || !walk[ni]) continue;
+      prev[ni] = cur;
+      q.push(ni);
+    }
+  }
+  if (prev[goal] < 0) return [];
+  const out: { i: number; j: number }[] = [];
+  let c = goal;
+  while (c !== start) {
+    out.push({ i: c % SIZE, j: (c / SIZE) | 0 });
+    c = prev[c]!;
+  }
+  out.push({ i: x0, j: z0 });
+  out.reverse();
+  return out;
+}
+
+function buildRail(walk: Uint8Array, rooms: Room[], spawnI: number, spawnJ: number) {
+  // 部屋の中心を巡る閉路。傘おばけは格子ではなくこの線の上だけを滑る。
+  const stops = [{ i: spawnI, j: spawnJ }];
+  for (const r of rooms) {
+    stops.push({ i: r.x + (r.w >> 1), j: r.z + (r.h >> 1) });
+  }
+  stops.push({ i: spawnI, j: spawnJ });
+  const cells: { i: number; j: number }[] = [];
+  for (let s = 0; s < stops.length - 1; s++) {
+    const a = stops[s]!;
+    const b = stops[s + 1]!;
+    const seg = bfsPath(walk, a.i, a.j, b.i, b.j);
+    const start = s === 0 ? 0 : 1;
+    for (let k = start; k < seg.length; k++) cells.push(seg[k]!);
+  }
+  const rail: { x: number; z: number }[] = [];
+  for (const c of cells) {
+    const p = cellCenter(c.i, c.j);
+    const last = rail[rail.length - 1];
+    if (last && Math.hypot(p.x - last.x, p.z - last.z) < 0.4) continue;
+    rail.push(p);
+  }
+  return rail;
+}
+
+function placeHitodama(
+  walk: Uint8Array,
+  rng: ReturnType<typeof makeRng>,
+  spawnI: number,
+  spawnJ: number,
+) {
+  // 罰はない。歩く床の上に二十。色はゲーミング固定パレットを食い尽くす。
+  const placed: { x: number; z: number; color: number }[] = [];
+  const spots: { i: number; j: number }[] = [];
+  let tries = 0;
+  while (placed.length < 20 && tries < 600) {
+    tries += 1;
+    const i = rng.int(2, SIZE - 3);
+    const j = rng.int(2, SIZE - 3);
+    if (!walk[idx(i, j)]) continue;
+    if (Math.abs(i - spawnI) + Math.abs(j - spawnJ) < 5) continue;
+    if (spots.some((s) => Math.abs(s.i - i) + Math.abs(s.j - j) < 4)) continue;
+    spots.push({ i, j });
+    const c = cellCenter(i, j);
+    placed.push({
+      x: c.x,
+      z: c.z,
+      color: GAMING_COLORS[placed.length % GAMING_COLORS.length]!,
+    });
+  }
+  return placed;
 }
 
 function flood(walk: Uint8Array, sx: number, sz: number): Uint8Array {
@@ -302,6 +403,8 @@ export function generateRuin(seed: string): RuinWorld {
 
   const ac = cellCenter(atrium.x + (atrium.w >> 1), atrium.z + (atrium.h >> 1));
   const spawn = cellCenter(spawnI, spawnJ);
+  const rail = buildRail(walk, rooms, spawnI, spawnJ);
+  const hitodama = placeHitodama(walk, makeRng(seed, 23), spawnI, spawnJ);
 
   return {
     seed,
@@ -320,6 +423,8 @@ export function generateRuin(seed: string): RuinWorld {
     landmarkKind,
     landmark: { cx: ac.x, cz: ac.z, w: atrium.w * CELL, d: atrium.h * CELL },
     style,
+    rail,
+    hitodama,
   };
 }
 

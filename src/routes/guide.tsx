@@ -58,6 +58,21 @@ function Guide() {
         </section>
 
         <section className="border-line mt-5 border-t pt-5">
+          <h2 className="font-display text-lg">傘おばけ</h2>
+          <p className="text-muted mt-2 text-sm leading-relaxed">
+            廊を滑るものは、人ではない。レールの上だけを、あなたよりわずかに速く往く。灯を消せば、経路が蒼く浮かぶ。触れれば、器は傘と仲良しになる。その先に残るのは緊急脱出だけである。拾った断片は没収され、記録には器の棄却と残る。灯の下では、レールは規格の外へ消える。
+
+          </p>
+        </section>
+
+        <section className="border-line mt-5 border-t pt-5">
+          <h2 className="font-display text-lg">人魂</h2>
+          <p className="text-muted mt-2 text-sm leading-relaxed">
+            廊に浮かぶ色炎は、敵ではない。触れても器は棄てられない。ゲーミングの色で燃え、近くの輪郭を少し返す。灯の代わりではない。道標に近い。
+          </p>
+        </section>
+
+        <section className="border-line mt-5 border-t pt-5">
           <h2 className="font-display text-lg">名</h2>
           <p className="text-muted mt-2 text-sm leading-relaxed">
             連携すれば、あなたの名を変えられる。拾得と脱出は、何月何日の何時に、何処で、何を手にしたかとして残る。名を残さない探索は、廃墟と同じく、規格の外で消える。
