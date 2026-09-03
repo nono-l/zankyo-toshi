@@ -60,8 +60,42 @@ function Guide() {
         <section className="border-line mt-5 border-t pt-5">
           <h2 className="font-display text-lg">傘おばけ</h2>
           <p className="text-muted mt-2 text-sm leading-relaxed">
-            廊を滑るものは、人ではない。レールの上だけを、あなたよりわずかに速く往く。灯を消せば、経路が蒼く浮かぶ。触れれば、器は傘と仲良しになる。その先に残るのは緊急脱出だけである。拾った断片は没収され、記録には器の棄却と残る。灯の下では、レールは規格の外へ消える。
+            廊を滑るものは、人ではない。レールの上だけを、あなたよりわずかに速く往く。カケラを取るたび五体増える。灯を消せば、経路が蒼く浮かぶ。触れれば、器は傘と仲良しになる。
+          </p>
+        </section>
 
+        <section className="border-line mt-5 border-t pt-5">
+          <h2 className="font-display text-lg">ミミックさん</h2>
+          <p className="text-muted mt-2 text-sm leading-relaxed">
+            壁際に三十。十メートルだけ同じ速さで寄ってくる。触れればハッピーエンド。記録には、ミミックさんに捕まった、と残る。
+          </p>
+        </section>
+
+        <section className="border-line mt-5 border-t pt-5">
+          <h2 className="font-display text-lg">アカミソ</h2>
+          <p className="text-muted mt-2 text-sm leading-relaxed">
+            柱の側に八割。消灯のときだけ光る。灯の下ではほとんど透ける。一秒以上触れると強制脱出である。
+          </p>
+        </section>
+
+        <section className="border-line mt-5 border-t pt-5">
+          <h2 className="font-display text-lg">鉄パイプの妖精さん</h2>
+          <p className="text-muted mt-2 text-sm leading-relaxed">
+            水の側に、鉢の黒髪で立つ。継手のついた管を横に構える。暇ならラジオ体操。罰は、まだない。
+          </p>
+        </section>
+
+        <section className="border-line mt-5 border-t pt-5">
+          <h2 className="font-display text-lg">ゆきおんな</h2>
+          <p className="text-muted mt-2 text-sm leading-relaxed">
+            屋根のない空の下に立つ。白髪と水色。顔はキャンバス。暇ならラジオ体操。罰は、まだない。
+          </p>
+        </section>
+
+        <section className="border-line mt-5 border-t pt-5">
+          <h2 className="font-display text-lg">めりさん</h2>
+          <p className="text-muted mt-2 text-sm leading-relaxed">
+            祠の側に立つ。紫のヴェールと緑の眼。罰は、まだない。図鑑の六番である。
           </p>
         </section>
 

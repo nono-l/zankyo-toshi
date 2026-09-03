@@ -5,7 +5,7 @@
 // @ts-nocheck
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
-import { createGhost, GHOST_CATALOG, type GhostKind } from "@/game/ghosts";
+import { createGhost, GHOST_CATALOG, setBagFace, posePipeTaiso, type GhostKind } from "@/game/ghosts";
 
 export function GhostGallery({ onClose }: { onClose: () => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -58,15 +58,31 @@ export function GhostGallery({ onClose }: { onClose: () => void }) {
 
     let raf = 0;
     let lastKind = kindRef.current;
+    let faceI = 0;
+    let faceT = 0;
     const loop = (now: number) => {
       if (kindRef.current !== lastKind) {
         lastKind = kindRef.current;
         swap(lastKind);
+        faceI = 0;
+        faceT = now;
       }
       const t = now * 0.001;
-      ghost.rotation.y = t * 0.65;
-      ghost.position.y = Math.abs(Math.sin(t * 3.1)) * 0.14;
-      ghost.rotation.z = Math.sin(t * 3.1) * 0.1;
+      if (lastKind === "mimic" && now - faceT > 500) {
+        faceT = now;
+        faceI += 1;
+        setBagFace(ghost, faceI);
+      }
+      if (lastKind === "pipe" || lastKind === "yuki" || lastKind === "meri") {
+        posePipeTaiso(ghost, t);
+        ghost.rotation.y = t * 0.35;
+        ghost.position.y = 0;
+        ghost.rotation.z = 0;
+      } else {
+        ghost.rotation.y = t * 0.65;
+        ghost.position.y = Math.abs(Math.sin(t * 3.1)) * 0.14;
+        ghost.rotation.z = Math.sin(t * 3.1) * 0.1;
+      }
       const w = canvas.clientWidth;
       const h = canvas.clientHeight;
       if (w && h) {
@@ -89,7 +105,8 @@ export function GhostGallery({ onClose }: { onClose: () => void }) {
   return (
     <div className="absolute inset-0 z-30 flex flex-col bg-bg px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-[max(1.25rem,env(safe-area-inset-top))]">
       <div className="mx-auto flex h-full w-full max-w-md flex-col">
-        <p className="text-subtle text-xs tracking-[0.28em]">GALLERY</p>
+        <p className="text-subtle text-xs tracking-[0.28em]">図鑑</p>
+        <p className="text-subtle mt-1 text-xs">No.{String(entry.no).padStart(3, "0")}</p>
         <h2 className="font-display mt-1 text-2xl">{entry.name}</h2>
         <p className="text-muted mt-2 text-sm leading-relaxed">{entry.note}</p>
         <canvas
@@ -106,7 +123,7 @@ export function GhostGallery({ onClose }: { onClose: () => void }) {
                 className={g.kind === kind ? "btn-primary px-4" : "btn-ghost px-4"}
                 onClick={() => setKind(g.kind)}
               >
-                {g.name}
+                No.{String(g.no).padStart(3, "0")} {g.name}
               </button>
             ))}
           </div>

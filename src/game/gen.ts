@@ -59,6 +59,10 @@ export type RuinWorld = {
   style: "stone" | "concrete" | "mixed";
   rail: { x: number; z: number }[];
   hitodama: { x: number; z: number; color: number }[];
+  mimics: { x: number; z: number; faceX: number; faceZ: number }[];
+  pipes: { x: number; z: number }[];
+  yuki: { x: number; z: number }[];
+  meri: { x: number; z: number }[];
 };
 
 
@@ -199,6 +203,141 @@ function placeHitodama(
       z: c.z,
       color: GAMING_COLORS[placed.length % GAMING_COLORS.length]!,
     });
+  }
+  return placed;
+}
+
+function placeMimics(
+  walk: Uint8Array,
+  rng: ReturnType<typeof makeRng>,
+  spawnI: number,
+  spawnJ: number,
+) {
+  const edges: { i: number; j: number; fx: number; fz: number }[] = [];
+  for (let j = 2; j < SIZE - 2; j++) {
+    for (let i = 2; i < SIZE - 2; i++) {
+      if (!walk[idx(i, j)]) continue;
+      if (Math.abs(i - spawnI) + Math.abs(j - spawnJ) < 4) continue;
+      for (const [di, dj] of [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+      ] as const) {
+        if (walk[idx(i + di, j + dj)]) continue;
+        edges.push({ i, j, fx: di, fz: dj });
+        break;
+      }
+    }
+  }
+  for (let n = edges.length - 1; n > 0; n--) {
+    const k = rng.int(0, n + 1);
+    const tmp = edges[n]!;
+    edges[n] = edges[k]!;
+    edges[k] = tmp;
+  }
+  const placed: { x: number; z: number; faceX: number; faceZ: number }[] = [];
+  for (const e of edges) {
+    if (placed.length >= 30) break;
+    const c = cellCenter(e.i, e.j);
+    if (placed.some((p) => Math.hypot(p.x - c.x, p.z - c.z) < CELL * 2.4)) continue;
+    placed.push({ x: c.x, z: c.z, faceX: e.fx, faceZ: e.fz });
+  }
+  return placed;
+}
+
+function placePipes(
+  walk: Uint8Array,
+  flooded: Uint8Array,
+  rng: ReturnType<typeof makeRng>,
+) {
+  const spots: { x: number; z: number }[] = [];
+  for (let j = 2; j < SIZE - 2; j++) {
+    for (let i = 2; i < SIZE - 2; i++) {
+      if (!walk[idx(i, j)]) continue;
+      let water = flooded[idx(i, j)] === 1;
+      if (!water) {
+        for (const [di, dj] of [
+          [1, 0],
+          [-1, 0],
+          [0, 1],
+          [0, -1],
+        ] as const) {
+          if (flooded[idx(i + di, j + dj)]) water = true;
+        }
+      }
+      if (!water) continue;
+      spots.push(cellCenter(i, j));
+    }
+  }
+  for (let n = spots.length - 1; n > 0; n--) {
+    const k = rng.int(0, n + 1);
+    const tmp = spots[n]!;
+    spots[n] = spots[k]!;
+    spots[k] = tmp;
+  }
+  const placed: { x: number; z: number }[] = [];
+  for (const s of spots) {
+    if (placed.length >= 6) break;
+    if (placed.some((p) => Math.hypot(p.x - s.x, p.z - s.z) < CELL * 3)) continue;
+    placed.push(s);
+  }
+  return placed;
+}
+
+function placeYuki(
+  walk: Uint8Array,
+  openSky: Uint8Array,
+  rng: ReturnType<typeof makeRng>,
+) {
+  const spots: { x: number; z: number }[] = [];
+  for (let j = 2; j < SIZE - 2; j++) {
+    for (let i = 2; i < SIZE - 2; i++) {
+      if (!walk[idx(i, j)] || !openSky[idx(i, j)]) continue;
+      spots.push(cellCenter(i, j));
+    }
+  }
+  for (let n = spots.length - 1; n > 0; n--) {
+    const k = rng.int(0, n + 1);
+    const tmp = spots[n]!;
+    spots[n] = spots[k]!;
+    spots[k] = tmp;
+  }
+  const placed: { x: number; z: number }[] = [];
+  for (const s of spots) {
+    if (placed.length >= 8) break;
+    if (placed.some((p) => Math.hypot(p.x - s.x, p.z - s.z) < CELL * 4)) continue;
+    placed.push(s);
+  }
+  return placed;
+}
+
+function placeMeri(
+  walk: Uint8Array,
+  rooms: Room[],
+  rng: ReturnType<typeof makeRng>,
+) {
+  const spots: { x: number; z: number }[] = [];
+  for (const r of rooms) {
+    if (r.kind === "flooded") continue;
+    for (let z = r.z + 1; z < r.z + r.h - 1; z++) {
+      for (let x = r.x + 1; x < r.x + r.w - 1; x++) {
+        if (!inBounds(x, z) || !walk[idx(x, z)]) continue;
+        spots.push(cellCenter(x, z));
+      }
+    }
+  }
+  for (let n = spots.length - 1; n > 0; n--) {
+    const k = rng.int(0, n + 1);
+    const tmp = spots[n]!;
+    spots[n] = spots[k]!;
+    spots[k] = tmp;
+  }
+  const placed: { x: number; z: number }[] = [];
+  for (const s of spots) {
+    if (placed.length >= 6) break;
+    if (placed.some((p) => Math.hypot(p.x - s.x, p.z - s.z) < CELL * 5)) continue;
+    placed.push(s);
   }
   return placed;
 }
@@ -405,6 +544,10 @@ export function generateRuin(seed: string): RuinWorld {
   const spawn = cellCenter(spawnI, spawnJ);
   const rail = buildRail(walk, rooms, spawnI, spawnJ);
   const hitodama = placeHitodama(walk, makeRng(seed, 23), spawnI, spawnJ);
+  const mimics = placeMimics(walk, makeRng(seed, 29), spawnI, spawnJ);
+  const pipes = placePipes(walk, flooded, makeRng(seed, 37));
+  const yuki = placeYuki(walk, openSky, makeRng(seed, 41));
+  const meri = placeMeri(walk, rooms, makeRng(seed, 43));
 
   return {
     seed,
@@ -425,6 +568,10 @@ export function generateRuin(seed: string): RuinWorld {
     style,
     rail,
     hitodama,
+    mimics,
+    pipes,
+    yuki,
+    meri,
   };
 }
 

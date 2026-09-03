@@ -66,11 +66,11 @@ export function EchoesApp() {
   const [lightPreview, setLightPreview] = useState<
     "room" | "lantern" | "fogOff" | "fogOn" | null
   >(null);
-  const [ghostFarewell, setGhostFarewell] = useState(false);
+  const [ghostFarewell, setGhostFarewell] = useState<"kasa" | "mimic" | "aka" | null>(null);
   const [ghostGallery, setGhostGallery] = useState(false);
   const pendingRef = useRef<FindInput[]>([]);
   pendingRef.current = pending;
-  const emergencyExitRef = useRef<(reason?: "emergency" | "ghost") => void>(() => {});
+  const emergencyExitRef = useRef<(reason?: "emergency" | "ghost" | "mimic") => void>(() => {});
 
 
 
@@ -94,10 +94,10 @@ export function EchoesApp() {
       pendingRef.current = [...pendingRef.current, row];
       setPending(pendingRef.current);
     };
-    engine.onGhostHit = () => {
+    engine.onGhostHit = (kind) => {
       engine.setPaused(true);
-      setGhostFarewell(true);
-      window.setTimeout(() => emergencyExitRef.current("ghost"), 3400);
+      setGhostFarewell(kind);
+      window.setTimeout(() => emergencyExitRef.current(kind === "mimic" ? "mimic" : "ghost"), 3400);
     };
 
 
@@ -163,7 +163,7 @@ export function EchoesApp() {
     setPending([]);
     pendingRef.current = [];
     setLeaving(false);
-    setGhostFarewell(false);
+    setGhostFarewell(null);
     setGhostGallery(false);
     onStick(0, 0);
   };
@@ -184,7 +184,7 @@ export function EchoesApp() {
     void go();
   };
 
-  const emergencyExit = (reason: "emergency" | "ghost" = "emergency") => {
+  const emergencyExit = (reason: "emergency" | "ghost" | "mimic" = "emergency") => {
     if (leaving) return;
     setLeaving(true);
     const n = pendingRef.current.length;
@@ -419,13 +419,26 @@ export function EchoesApp() {
       {ghostFarewell && (
         <div className="absolute inset-0 z-30 flex items-end justify-center bg-[color-mix(in_oklab,var(--color-bg)_62%,transparent)] px-5 pb-16">
           <div className="panel w-full max-w-md p-6">
-            <p className="font-display text-xl leading-relaxed">
-              傘おばけと仲良しになってしまった。
-            </p>
-            <p className="text-muted mt-4 text-sm leading-relaxed">
-              この器は、もうダメです。
-            </p>
-            <p className="text-muted mt-2 text-sm leading-relaxed">緊急脱出します。</p>
+            {ghostFarewell === "mimic" ? (
+              <>
+                <p className="font-display text-xl leading-relaxed">つ〜かま〜えた...</p>
+                <p className="text-muted mt-4 text-sm leading-relaxed">ハッピーエンド</p>
+              </>
+            ) : ghostFarewell === "aka" ? (
+              <>
+                <p className="font-display text-xl leading-relaxed">アカミソに触れ続けた。</p>
+                <p className="text-muted mt-4 text-sm leading-relaxed">この器は、もうダメです。</p>
+                <p className="text-muted mt-2 text-sm leading-relaxed">緊急脱出します。</p>
+              </>
+            ) : (
+              <>
+                <p className="font-display text-xl leading-relaxed">
+                  傘おばけと仲良しになってしまった。
+                </p>
+                <p className="text-muted mt-4 text-sm leading-relaxed">この器は、もうダメです。</p>
+                <p className="text-muted mt-2 text-sm leading-relaxed">緊急脱出します。</p>
+              </>
+            )}
           </div>
         </div>
       )}

@@ -1,29 +1,193 @@
 /*
   おばけの形。地形は gen.ts、滑走は echoes.ts。
-  ギャラリーと本番は同じ関数を見る。ここでだけ傘をいじる。
+  ギャラリーと本番は同じ関数を見る。
+  2026-09-04 ログ復元。未コミット分を会話記録から再構成した。
 */
 // @ts-nocheck
 import * as THREE from "three";
 
-export type GhostKind = "kasa";
+export type GhostKind = "kasa" | "mimic" | "aka" | "pipe" | "yuki" | "meri";
 
-export const GHOST_CATALOG: { kind: GhostKind; name: string; note: string }[] = [
+export const GHOST_CATALOG: {
+  kind: GhostKind;
+  no: number;
+  name: string;
+  note: string;
+}[] = [
   {
     kind: "kasa",
+    no: 1,
     name: "傘おばけ",
-    note: "レールの上を跳ねる。一眼、舌、一本下駄。触れると器が棄てられる。",
+    note: "レールの上を跳ねる。カケラを取るたび五体増える。触れれば器は棄てられる。",
+  },
+  {
+    kind: "mimic",
+    no: 2,
+    name: "ミミックさん",
+    note: "壁際に三十。袋の顔は顔文字で個体差。十メートルだけ寄ってくる。触れればハッピーエンド。",
+  },
+  {
+    kind: "aka",
+    no: 3,
+    name: "アカミソ",
+    note: "柱の側に八割。消灯のときだけ明るさ200で光る。灯の下ではほとんど透ける。1秒以上触れると強制脱出。",
+  },
+  {
+    kind: "pipe",
+    no: 4,
+    name: "鉄パイプの妖精さん",
+    note: "水の側に立つ。鉢の黒髪と継手。暇ならラジオ体操。罰は、まだない。",
+  },
+  {
+    kind: "yuki",
+    no: 5,
+    name: "ゆきおんな",
+    note: "開いた空の下に立つ。白髪・水色。顔はキャンバス。暇ならラジオ体操。罰は、まだない。",
+  },
+  {
+    kind: "meri",
+    no: 6,
+    name: "めりさん",
+    note: "祠の側に立つ。紫のヴェールと緑の眼。ゆきおんな流用。罰は、まだない。",
   },
 ];
 
 export function createGhost(kind: GhostKind) {
-  if (kind === "kasa") return createKasaObake();
+  if (kind === "mimic") return createMimic();
+  if (kind === "aka") return createAkamiso();
+  if (kind === "pipe") return createPipeYousei();
+  if (kind === "yuki") return createYukiOnna();
+  if (kind === "meri") return createMeriSan();
   return createKasaObake();
+}
+
+export const BAG_FACES = [
+  "・ω・",
+  "^_^",
+  ">_<",
+  "●ω●",
+  "￣▽￣",
+  "T_T",
+  "・∀・",
+  "￣ω￣",
+  "×_×",
+  "◕‿◕",
+  "・ᴗ・",
+  "¬‿¬",
+] as const;
+
+const faceMaps = new Map<string, THREE.CanvasTexture>();
+
+function mat(color: number, extra: Record<string, unknown> = {}) {
+  return new THREE.MeshStandardMaterial({
+    color,
+    roughness: 0.72,
+    ...extra,
+  });
+}
+
+function faceTexture(text: string) {
+  const hit = faceMaps.get(text);
+  if (hit) return hit;
+  const c = document.createElement("canvas");
+  c.width = 256;
+  c.height = 160;
+  const ctx = c.getContext("2d")!;
+  ctx.fillStyle = "#c6a27c";
+  ctx.fillRect(0, 0, 256, 160);
+  ctx.fillStyle = "#1a1511";
+  ctx.font =
+    "700 54px 'Hiragino Sans','Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, 128, 86);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  tex.needsUpdate = true;
+  faceMaps.set(text, tex);
+  return tex;
+}
+
+export function setBagFace(root: THREE.Object3D, index: number) {
+  const mesh = root.getObjectByName("bag-face") as THREE.Mesh | undefined;
+  if (!mesh) return;
+  const n = BAG_FACES.length;
+  const text = BAG_FACES[((index % n) + n) % n]!;
+  mesh.material = new THREE.MeshBasicMaterial({
+    map: faceTexture(text),
+    toneMapped: false,
+  });
+}
+
+function paperBag(paper: THREE.Material, crease: THREE.Material, face = 0) {
+  const bag = new THREE.Group();
+  bag.name = "paper-bag";
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.4, 0.52), paper);
+  body.position.y = 0.24;
+  const lid = new THREE.Mesh(new THREE.BoxGeometry(0.68, 0.05, 0.54), paper);
+  lid.position.y = 0.445;
+  const rim = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.045, 0.56), paper);
+  rim.position.y = 0.04;
+  const gusL = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.38, 0.5), crease);
+  gusL.position.set(-0.33, 0.24, 0);
+  const gusR = gusL.clone();
+  gusR.position.x = 0.33;
+  bag.add(body, lid, rim, gusL, gusR);
+  const faceM = new THREE.Mesh(new THREE.PlaneGeometry(0.58, 0.3), new THREE.MeshBasicMaterial());
+  faceM.name = "bag-face";
+  faceM.position.set(0, 0.25, 0.262);
+  bag.add(faceM);
+  setBagFace(bag, face);
+  bag.rotation.z = -0.16;
+  bag.rotation.x = -0.05;
+  return bag;
+}
+
+export function createMimic() {
+  const g = new THREE.Group();
+  g.name = "mimic";
+  g.userData.kind = "mimic";
+  const paper = mat(0xc6a27c, { roughness: 0.86 });
+  const crease = mat(0x8a6a48, { roughness: 0.9 });
+  const coat = mat(0x5a4638, { roughness: 0.8 });
+  const skin = mat(0xf3e6d8, { roughness: 0.5 });
+  const bag = paperBag(paper, crease, 0);
+  bag.position.y = 1.05;
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.46, 0.28), coat);
+  body.position.y = 0.62;
+  const armL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.28, 0.12), coat);
+  armL.position.set(-0.28, 0.58, 0);
+  const armR = armL.clone();
+  armR.position.x = 0.28;
+  const handL = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 8), skin);
+  handL.position.set(-0.28, 0.42, 0.04);
+  const handR = handL.clone();
+  handR.position.x = 0.28;
+  const legL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.28, 0.14), coat);
+  legL.position.set(-0.1, 0.2, 0);
+  const legR = legL.clone();
+  legR.position.x = 0.1;
+  g.add(bag, body, armL, armR, handL, handR, legL, legR);
+  return g;
+}
+
+let mimicLiteProto: THREE.Group | null = null;
+export function createMimicLite(face = 0) {
+  if (!mimicLiteProto) {
+    mimicLiteProto = createMimic();
+    mimicLiteProto.name = "mimic-lite";
+  }
+  const c = mimicLiteProto.clone(true);
+  c.userData.kind = "mimic";
+  setBagFace(c, face);
+  return c;
 }
 
 export function createKasaObake() {
   const g = new THREE.Group();
   g.name = "kasa-obake";
-
+  g.userData.kind = "kasa";
   const paper = new THREE.MeshStandardMaterial({
     color: 0xd4c4ae,
     roughness: 0.88,
@@ -31,10 +195,7 @@ export function createKasaObake() {
     emissive: 0x2a3e52,
     emissiveIntensity: 0.12,
   });
-  const wood = new THREE.MeshStandardMaterial({
-    color: 0x6b5344,
-    roughness: 0.78,
-  });
+  const wood = new THREE.MeshStandardMaterial({ color: 0x6b5344, roughness: 0.78 });
   const tongueMat = new THREE.MeshStandardMaterial({
     color: 0xe58b9a,
     roughness: 0.45,
@@ -53,7 +214,6 @@ export function createKasaObake() {
     emissive: 0x4aa8d8,
     emissiveIntensity: 0.45,
   });
-
   const canopy = new THREE.Mesh(
     new THREE.SphereGeometry(0.62, 20, 12, 0, Math.PI * 2, 0, Math.PI * 0.52),
     paper,
@@ -72,7 +232,6 @@ export function createKasaObake() {
     rib.rotation.y = (k / 8) * Math.PI * 2;
     g.add(rib);
   }
-
   const eye = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 12), white);
   eye.position.set(0, 1.16, 0.46);
   eye.scale.set(1, 1, 0.72);
@@ -81,16 +240,13 @@ export function createKasaObake() {
   const shine = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 6), white);
   shine.position.set(0.05, 1.22, 0.64);
   g.add(eye, pupil, shine);
-
   const tongue = new THREE.Mesh(new THREE.CapsuleGeometry(0.055, 0.28, 4, 8), tongueMat);
   tongue.position.set(0, 0.86, 0.38);
   tongue.rotation.x = 0.55;
   g.add(tongue);
-
   const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.038, 0.42, 8), wood);
   handle.position.y = 0.76;
   g.add(handle);
-
   const armL = new THREE.Mesh(new THREE.CapsuleGeometry(0.04, 0.16, 3, 6), paper);
   armL.position.set(-0.2, 0.78, 0.08);
   armL.rotation.z = 0.85;
@@ -99,7 +255,6 @@ export function createKasaObake() {
   armR.position.x = 0.2;
   armR.rotation.z = -0.85;
   g.add(armL, armR);
-
   const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.048, 0.42, 8), paper);
   leg.position.y = 0.38;
   const foot = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.045, 0.28), wood);
@@ -109,10 +264,354 @@ export function createKasaObake() {
   const getaB = getaF.clone();
   getaB.position.z = -0.08;
   g.add(leg, foot, getaF, getaB);
-
   const lamp = new THREE.PointLight(0x66c8ff, 1.1, 4.5, 2);
   lamp.name = "ghostLamp";
   lamp.position.y = 1.2;
   g.add(lamp);
+  return g;
+}
+
+let kasaLiteProto: THREE.Group | null = null;
+export function createKasaLite() {
+  if (!kasaLiteProto) {
+    kasaLiteProto = createKasaObake();
+    kasaLiteProto.name = "kasa-lite";
+  }
+  const c = kasaLiteProto.clone(true);
+  c.userData.kind = "kasa";
+  return c;
+}
+
+function akaMat(color: number, extra: Record<string, unknown> = {}) {
+  return mat(color, {
+    emissive: color,
+    emissiveIntensity: 0.4,
+    transparent: true,
+    opacity: 1,
+    ...extra,
+  });
+}
+
+export function createAkamiso() {
+  const g = new THREE.Group();
+  g.name = "akamiso";
+  g.userData.kind = "aka";
+  const hairC = akaMat(0x7a2438, { roughness: 0.78 });
+  const faceC = akaMat(0xf7f2ee, { roughness: 0.45, emissive: 0xffd0d8, emissiveIntensity: 0.25 });
+  const robeC = akaMat(0x1b211e, { roughness: 0.86, emissive: 0x3a1822, emissiveIntensity: 0.35 });
+  const stoleC = akaMat(0x6e1f35, { roughness: 0.72 });
+  const robe = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.5, 0.26), robeC);
+  robe.position.y = 0.72;
+  const hem = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.28, 0.28), robeC);
+  hem.position.y = 0.32;
+  const stoleL = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.62, 0.08), stoleC);
+  stoleL.position.set(-0.14, 0.7, 0.08);
+  const stoleR = stoleL.clone();
+  stoleR.position.x = 0.14;
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.2, 14, 12), faceC);
+  head.position.y = 1.14;
+  const hair = new THREE.Mesh(new THREE.SphereGeometry(0.24, 12, 10), hairC);
+  hair.position.set(-0.02, 1.28, -0.02);
+  hair.scale.set(1.15, 0.72, 1.05);
+  g.add(robe, hem, stoleL, stoleR, head, hair);
+  const lamp = new THREE.PointLight(0xff6688, 200, 8, 2);
+  lamp.name = "akaLamp";
+  lamp.position.y = 1.15;
+  lamp.visible = false;
+  g.add(lamp);
+  return g;
+}
+
+let akaLiteProto: THREE.Group | null = null;
+export function createAkamisoLite() {
+  if (!akaLiteProto) {
+    akaLiteProto = createAkamiso();
+    akaLiteProto.name = "akamiso-lite";
+  }
+  const c = akaLiteProto.clone(true);
+  c.userData.kind = "aka";
+  const lamp = new THREE.PointLight(0xff6688, 200, 8, 2);
+  lamp.name = "akaLamp";
+  lamp.position.y = 1.15;
+  lamp.visible = false;
+  c.add(lamp);
+  return c;
+}
+
+export function createPipeYousei() {
+  const g = new THREE.Group();
+  g.name = "pipe-yousei";
+  g.userData.kind = "pipe";
+  const hairC = mat(0x111214, { roughness: 0.9 });
+  const faceC = mat(0xf6f3ef, { roughness: 0.48 });
+  const coat = mat(0x2c333c, { roughness: 0.82 });
+  const coatDark = mat(0x1a1e24, { roughness: 0.84 });
+  const steel = mat(0x8b939c, { metalness: 0.72, roughness: 0.38 });
+  const eyeW = mat(0xfbf8f4, { roughness: 0.35 });
+  const eyeB = mat(0x0d0e10, { roughness: 0.4 });
+  const hips = new THREE.Group();
+  hips.name = "pipe-hips";
+  const hem = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.22, 0.26), coatDark);
+  hem.position.y = 0.36;
+  const shoeL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.07, 0.16), hairC);
+  shoeL.position.set(-0.1, 0.05, 0.02);
+  const shoeR = shoeL.clone();
+  shoeR.position.x = 0.1;
+  hips.add(hem, shoeL, shoeR);
+  const torso = new THREE.Group();
+  torso.name = "pipe-torso";
+  torso.position.y = 0.5;
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.42, 0.24), coat);
+  body.position.y = 0.18;
+  const collar = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.08, 0.16), coatDark);
+  collar.position.set(0, 0.4, 0.06);
+  torso.add(body, collar);
+  const armL = new THREE.Group();
+  armL.name = "pipe-arm-l";
+  armL.position.set(-0.24, 0.16, 0.06);
+  const sleeveL = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.16, 0.14), coat);
+  const handL = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 8), faceC);
+  handL.position.set(-0.02, -0.1, 0.06);
+  armL.add(sleeveL, handL);
+  const armR = new THREE.Group();
+  armR.name = "pipe-arm-r";
+  armR.position.set(0.22, 0.16, 0.06);
+  const sleeveR = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.16, 0.14), coat);
+  const handR = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 8), faceC);
+  handR.position.set(0, -0.12, 0.08);
+  armR.add(sleeveR, handR);
+  const pipe = new THREE.Group();
+  pipe.name = "pipe-bar";
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.95, 8), steel);
+  shaft.rotation.z = Math.PI / 2;
+  const elbow = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.16, 8), steel);
+  elbow.position.set(-0.42, 0.04, 0);
+  elbow.rotation.z = 0.9;
+  pipe.add(shaft, elbow);
+  pipe.position.set(0, 0.08, 0.16);
+  const head = new THREE.Group();
+  head.name = "pipe-head";
+  head.position.y = 0.62;
+  const face = new THREE.Mesh(new THREE.SphereGeometry(0.2, 14, 12), faceC);
+  face.scale.set(1.08, 0.88, 0.95);
+  const bowl = new THREE.Mesh(
+    new THREE.SphereGeometry(0.28, 14, 12, 0, Math.PI * 2, 0, Math.PI * 0.62),
+    hairC,
+  );
+  bowl.position.set(0, 0.08, -0.02);
+  const bang = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.22, 0.18), hairC);
+  bang.position.set(0, 0.1, 0.16);
+  head.add(face, bowl, bang);
+  const mkEye = (x: number) => {
+    const e = new THREE.Group();
+    const w = new THREE.Mesh(new THREE.SphereGeometry(0.048, 8, 8), eyeW);
+    w.scale.set(1.05, 0.85, 0.5);
+    const b = new THREE.Mesh(new THREE.SphereGeometry(0.032, 8, 8), eyeB);
+    b.position.z = 0.018;
+    e.add(w, b);
+    e.position.set(x, -0.02, 0.17);
+    return e;
+  };
+  head.add(mkEye(-0.075), mkEye(0.075));
+  torso.add(armL, armR, pipe, head);
+  hips.add(torso);
+  g.add(hips);
+  return g;
+}
+
+export function posePipeTaiso(g: THREE.Object3D, t: number) {
+  const hips = g.getObjectByName("pipe-hips");
+  const torso = g.getObjectByName("pipe-torso");
+  const head = g.getObjectByName("pipe-head");
+  const armL = g.getObjectByName("pipe-arm-l");
+  const armR = g.getObjectByName("pipe-arm-r");
+  const pipe = g.getObjectByName("pipe-bar");
+  if (!hips || !torso || !armL || !armR) return;
+  const u = ((t % 10) + 10) % 10;
+  hips.rotation.set(0, 0, 0);
+  hips.position.y = 0;
+  torso.rotation.set(0, 0, 0);
+  if (head) head.rotation.set(0, 0, 0);
+  armL.rotation.set(0, 0, 0);
+  armR.rotation.set(0, 0, 0);
+  if (pipe) {
+    pipe.position.set(0, 0.08, 0.16);
+    pipe.rotation.set(-0.08, 0, 0);
+  }
+  if (u < 2) {
+    const k = Math.sin((u / 2) * Math.PI);
+    armL.rotation.x = -k * 1.55;
+    armR.rotation.x = -k * 1.55;
+    if (pipe) {
+      pipe.position.y = 0.08 + k * 0.52;
+      pipe.rotation.x = -0.08 - k * 0.35;
+    }
+    hips.position.y = k * 0.03;
+  } else if (u < 4) {
+    const k = Math.sin(((u - 2) / 2) * Math.PI * 2);
+    torso.rotation.z = k * 0.42;
+    armL.rotation.z = k * 0.35;
+    armR.rotation.z = k * 0.35;
+  } else if (u < 6) {
+    const a = ((u - 4) / 2) * Math.PI * 2;
+    armL.rotation.x = -0.4 + Math.sin(a) * 0.9;
+    armR.rotation.x = -0.4 + Math.sin(a) * 0.9;
+    armL.rotation.z = Math.cos(a) * 0.55;
+    armR.rotation.z = -Math.cos(a) * 0.55;
+  } else if (u < 8) {
+    const k = Math.sin(((u - 6) / 2) * Math.PI);
+    torso.rotation.x = k * 0.7;
+    armL.rotation.x = k * 0.35;
+    armR.rotation.x = k * 0.35;
+  } else {
+    const k = Math.abs(Math.sin(((u - 8) / 2) * Math.PI * 3));
+    hips.position.y = k * 0.14;
+    armL.rotation.x = -k * 0.5;
+    armR.rotation.x = -k * 0.5;
+  }
+}
+
+function yukiFaceTexture() {
+  const c = document.createElement("canvas");
+  c.width = 512;
+  c.height = 640;
+  const ctx = c.getContext("2d")!;
+  ctx.clearRect(0, 0, 512, 640);
+  const hair = "#efeae4";
+  const line = "#3a2c33";
+  const streak = "#1c1c20";
+  const skin = "#f6e7de";
+  const mint = "#5ad8cc";
+  ctx.fillStyle = hair;
+  ctx.beginPath();
+  ctx.ellipse(256, 250, 210, 230, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = skin;
+  ctx.beginPath();
+  ctx.ellipse(248, 310, 118, 138, 0.08, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = streak;
+  ctx.beginPath();
+  ctx.moveTo(250, 150);
+  ctx.bezierCurveTo(300, 140, 340, 180, 350, 280);
+  ctx.bezierCurveTo(340, 360, 300, 400, 280, 360);
+  ctx.bezierCurveTo(300, 240, 270, 180, 250, 150);
+  ctx.fill();
+  ctx.fillStyle = mint;
+  ctx.beginPath();
+  ctx.ellipse(207, 302, 20, 24, -0.15, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#fff";
+  ctx.beginPath();
+  ctx.ellipse(199, 292, 7, 9, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = line;
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(228, 372);
+  ctx.quadraticCurveTo(250, 388, 278, 372);
+  ctx.stroke();
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+function chibiBody(coat: THREE.Material, coatDark: THREE.Material, faceC: THREE.Material, shoeC: THREE.Material) {
+  const g = new THREE.Group();
+  const hips = new THREE.Group();
+  hips.name = "pipe-hips";
+  const hem = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.22, 0.26), coatDark);
+  hem.position.y = 0.36;
+  const shoeL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.07, 0.16), shoeC);
+  shoeL.position.set(-0.1, 0.05, 0.02);
+  const shoeR = shoeL.clone();
+  shoeR.position.x = 0.1;
+  hips.add(hem, shoeL, shoeR);
+  const torso = new THREE.Group();
+  torso.name = "pipe-torso";
+  torso.position.y = 0.5;
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.42, 0.24), coat);
+  body.position.y = 0.18;
+  torso.add(body);
+  const armL = new THREE.Group();
+  armL.name = "pipe-arm-l";
+  armL.position.set(-0.24, 0.16, 0.06);
+  armL.add(new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.16, 0.14), coat));
+  const handL = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 8), faceC);
+  handL.position.set(-0.02, -0.1, 0.06);
+  armL.add(handL);
+  const armR = new THREE.Group();
+  armR.name = "pipe-arm-r";
+  armR.position.set(0.22, 0.16, 0.06);
+  armR.add(new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.16, 0.14), coat));
+  const handR = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 8), faceC);
+  handR.position.set(0, -0.12, 0.08);
+  armR.add(handR);
+  const head = new THREE.Group();
+  head.name = "pipe-head";
+  head.position.y = 0.62;
+  torso.add(armL, armR, head);
+  hips.add(torso);
+  g.add(hips);
+  return { g, head };
+}
+
+export function createYukiOnna() {
+  const faceC = mat(0xf6f3ef, { roughness: 0.48 });
+  const coat = mat(0x7aefd4, { roughness: 0.55, emissive: 0x3a8f7a, emissiveIntensity: 0.12 });
+  const coatDark = mat(0x5ed4bc, { roughness: 0.58 });
+  const shoeC = mat(0x2a333c, { roughness: 0.84 });
+  const { g, head } = chibiBody(coat, coatDark, faceC, shoeC);
+  g.name = "yuki-onna";
+  g.userData.kind = "yuki";
+  const face = new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 10), faceC);
+  const card = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.78, 0.98),
+    new THREE.MeshBasicMaterial({
+      map: yukiFaceTexture(),
+      transparent: true,
+      toneMapped: false,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    }),
+  );
+  card.name = "yuki-face";
+  card.position.set(0, 0.12, 0.2);
+  head.add(face, card);
+  return g;
+}
+
+let meriMap: THREE.Texture | null = null;
+function meriFaceMap() {
+  if (meriMap) return meriMap;
+  meriMap = new THREE.TextureLoader().load("/ghosts/meri-face.png");
+  meriMap.colorSpace = THREE.SRGBColorSpace;
+  meriMap.anisotropy = 4;
+  return meriMap;
+}
+
+export function createMeriSan() {
+  const faceC = mat(0xfffdf8, { roughness: 0.48 });
+  const coat = mat(0x3a5bb8, { roughness: 0.55, emissive: 0x1a2a68, emissiveIntensity: 0.12 });
+  const coatDark = mat(0x2a3f8a, { roughness: 0.58 });
+  const shoeC = mat(0x2a2a62, { roughness: 0.84 });
+  const { g, head } = chibiBody(coat, coatDark, faceC, shoeC);
+  g.name = "meri-san";
+  g.userData.kind = "meri";
+  const face = new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 10), faceC);
+  const card = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.9, 0.78),
+    new THREE.MeshBasicMaterial({
+      map: meriFaceMap(),
+      transparent: true,
+      toneMapped: false,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    }),
+  );
+  card.name = "meri-face";
+  card.position.set(0, 0.14, 0.2);
+  head.add(face, card);
   return g;
 }

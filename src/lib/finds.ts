@@ -97,21 +97,27 @@ export const recordEmergencyEscape = createServerFn({ method: "POST" })
     civName: clip(String(raw?.civName ?? ""), 80),
     landmarkName: clip(String(raw?.landmarkName ?? ""), 80),
     confiscated: Math.max(0, Math.min(20, Number(raw?.confiscated) || 0)),
-    reason: raw?.reason === "ghost" ? "ghost" : "emergency",
+    reason:
+      raw?.reason === "ghost" || raw?.reason === "mimic" || raw?.reason === "aka"
+        ? raw.reason
+        : "emergency",
   }))
   .handler(async ({ context, data }) => {
     if (!data.seed) return { ok: false as const };
     const sql = await getSql();
     const n = data.confiscated;
     const place =
-      data.reason === "ghost"
+      data.reason === "mimic"
         ? n > 0
-          ? `器の棄却 · ${n}個没収`
-          : "器の棄却"
-
-        : n > 0
-          ? `${n}個の断片を没収`
-          : "拾得なし";
+          ? `ミミックさんに捕まった · ${n}個没収`
+          : "ミミックさんに捕まった"
+        : data.reason === "ghost" || data.reason === "aka"
+          ? n > 0
+            ? `器の棄却 · ${n}個没収`
+            : "器の棄却"
+          : n > 0
+            ? `${n}個の断片を没収`
+            : "拾得なし";
     await sql`
       insert into escape_logs (
         user_id, seed, civ_name, landmark_name, place_label, confiscated, reason

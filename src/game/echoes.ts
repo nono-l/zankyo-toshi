@@ -7,7 +7,15 @@
 // @ts-nocheck
 import * as THREE from "three";
 import { generateRuin, isWalk, worldToCell, SIZE, CELL, type Relic, type RuinWorld } from "./gen";
-import { createKasaObake } from "./ghosts";
+import {
+  createKasaLite,
+  createMimicLite,
+  createAkamisoLite,
+  createPipeYousei,
+  posePipeTaiso,
+  createYukiOnna,
+  createMeriSan,
+} from "./ghosts";
 import { createSoul, tickSoul, type SoulFx } from "./hitodama";
 import { Input } from "./input";
 import { RuinAudio } from "./audio";
@@ -170,7 +178,20 @@ export class EchoesEngine {
     x: number;
     z: number;
   }) => void) | null = null;
-  onGhostHit: (() => void) | null = null;
+  onGhostHit: ((kind: "kasa" | "mimic" | "aka") => void) | null = null;
+  private kasas: THREE.Object3D[] = [];
+  private mimics: THREE.Object3D[] = [];
+  private pipes: THREE.Object3D[] = [];
+  private yukis: THREE.Object3D[] = [];
+  private meris: THREE.Object3D[] = [];
+  private colPos: { x: number; z: number }[] = [];
+  private akas: {
+    group: THREE.Object3D;
+    light: THREE.PointLight | null;
+    mats: THREE.MeshStandardMaterial[];
+    phase: number;
+  }[] = [];
+  private akaTouch = 0;
 
 
 
@@ -459,6 +480,14 @@ export class EchoesEngine {
     this.railCurve = null;
     this.ghostHit = false;
     this.souls = [];
+    this.kasas = [];
+    this.mimics = [];
+    this.pipes = [];
+    this.yukis = [];
+    this.meris = [];
+    this.akas = [];
+    this.colPos = [];
+    this.akaTouch = 0;
     this.found.clear();
     this.world = generateRuin(seed);
     this.hemi = new THREE.HemisphereLight(0xc9d2d4, 0x3a3228, 0.72);
@@ -488,6 +517,7 @@ export class EchoesEngine {
     this.ramps = [];
     this.portalSpin = null;
     this.souls = [];
+    this.colPos = [];
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(520, 520),
       new THREE.MeshStandardMaterial({ color: 0x2a2622, roughness: 1 }),
@@ -576,6 +606,7 @@ export class EchoesEngine {
           const px = x * CELL - o + CELL * 0.5;
           const pz = z * CELL - o + CELL * 0.5;
           cols.push(setPos(px, 2.3, pz));
+          this.colPos.push({ x: px, z: pz });
           // 柱は walk セル上の飾りなので格子だけではすり抜ける。
           this.solids.push({ x: px, z: pz, r: 0.5 });
 
@@ -631,6 +662,11 @@ export class EchoesEngine {
     this.addDebris();
     this.addPortal();
     this.addGhost();
+    this.addMimics();
+    this.addAkamiso();
+    this.addPipes();
+    this.addYuki();
+    this.addMeri();
     this.addHitodama();
   }
 
@@ -802,13 +838,98 @@ export class EchoesEngine {
     this.scene.add(rail);
     this.railMesh = rail;
 
-    const g = createKasaObake();
+    const g = createKasaLite();
     const lamp = g.getObjectByName("ghostLamp");
     this.ghostLight = lamp instanceof THREE.PointLight ? lamp : null;
     if (this.ghostLight) this.ghostLight.visible = false;
     this.scene.add(g);
     this.ghost = g;
+    this.kasas = [g];
     this.placeGhost();
+  }
+
+  private spawnExtraKasa(n: number) {
+    if (!this.railCurve) return;
+    for (let i = 0; i < n; i++) {
+      const extra = createKasaLite();
+      extra.userData.uOff = (this.kasas.length * 0.13) % 1;
+      this.scene.add(extra);
+      this.kasas.push(extra);
+    }
+  }
+
+  private addMimics() {
+    this.mimics = [];
+    let i = 0;
+    for (const p of this.world.mimics) {
+      const g = createMimicLite(i);
+      g.position.set(p.x, this.surfaceY(p.x, p.z), p.z);
+      g.lookAt(p.x + p.faceX, g.position.y, p.z + p.faceZ);
+      g.userData.homeX = p.x;
+      g.userData.homeZ = p.z;
+      this.scene.add(g);
+      this.mimics.push(g);
+      i += 1;
+    }
+  }
+
+  private addAkamiso() {
+    this.akas = [];
+    const rng = Math.abs(this.world.seed.split("").reduce((a, c) => a + c.charCodeAt(0), 0));
+    let n = 0;
+    for (const c of this.colPos) {
+      if (((rng + n * 17) % 10) >= 8) {
+        n += 1;
+        continue;
+      }
+      const g = createAkamisoLite();
+      const ox = ((n % 2) * 2 - 1) * 0.7;
+      g.position.set(c.x + ox, this.surfaceY(c.x, c.z), c.z);
+      const lamp = g.getObjectByName("akaLamp");
+      const mats: THREE.MeshStandardMaterial[] = [];
+      g.traverse((o) => {
+        const m = (o as THREE.Mesh).material;
+        if (m instanceof THREE.MeshStandardMaterial) mats.push(m);
+      });
+      this.scene.add(g);
+      this.akas.push({
+        group: g,
+        light: lamp instanceof THREE.PointLight ? lamp : null,
+        mats,
+        phase: n * 0.4,
+      });
+      n += 1;
+    }
+  }
+
+  private addPipes() {
+    this.pipes = [];
+    for (const p of this.world.pipes) {
+      const g = createPipeYousei();
+      g.position.set(p.x, this.surfaceY(p.x, p.z), p.z);
+      this.scene.add(g);
+      this.pipes.push(g);
+    }
+  }
+
+  private addYuki() {
+    this.yukis = [];
+    for (const p of this.world.yuki) {
+      const g = createYukiOnna();
+      g.position.set(p.x, this.surfaceY(p.x, p.z), p.z);
+      this.scene.add(g);
+      this.yukis.push(g);
+    }
+  }
+
+  private addMeri() {
+    this.meris = [];
+    for (const p of this.world.meri) {
+      const g = createMeriSan();
+      g.position.set(p.x, this.surfaceY(p.x, p.z), p.z);
+      this.scene.add(g);
+      this.meris.push(g);
+    }
   }
 
   private addHitodama() {
@@ -839,24 +960,134 @@ export class EchoesEngine {
   }
 
   private tickGhost(dt: number) {
-    if (!this.ghost || !this.railCurve) return;
+    if (!this.railCurve || this.kasas.length === 0) return;
     this.ghostU += (GHOST_SPEED * dt) / this.railLen;
-    this.placeGhost();
-    if (this.mode !== "play" || this.paused || this.ghostHit || this.debug.noclip) return;
     const p = this.yawObj.position;
-    const g = this.ghost.position;
-    const d = Math.hypot(p.x - g.x, p.z - g.z);
-    if (d < 3.2 && this.toastT <= 0) {
-      this.toast = "傘が近い";
-      this.toastT = 1.1;
+    for (let i = 0; i < this.kasas.length; i++) {
+      const g = this.kasas[i]!;
+      const off = Number(g.userData.uOff) || 0;
+      const u = (((this.ghostU + off) % 1) + 1) % 1;
+      const pt = this.railCurve.getPointAt(u);
+      const t = this.railCurve.getTangentAt(u);
+      const hop = Math.abs(Math.sin((this.ghostU + off) * this.railLen * 2.4)) * 0.14;
+      g.position.set(pt.x, this.surfaceY(pt.x, pt.z) + hop, pt.z);
+      g.rotation.y = Math.atan2(t.x, t.z);
+      const d = Math.hypot(p.x - g.position.x, p.z - g.position.z);
+      g.visible = this.mode !== "play" || d < 28;
+      if (this.mode !== "play" || this.paused || this.ghostHit || this.debug.noclip) continue;
+      if (d < 3.2 && this.toastT <= 0) {
+        this.toast = "傘が近い";
+        this.toastT = 1.1;
+      }
+      if (d < GHOST_HIT) {
+        this.ghostHit = true;
+        this.toast = null;
+        this.emit();
+        this.onGhostHit?.("kasa");
+      }
     }
-    if (d < GHOST_HIT) {
-      this.ghostHit = true;
-      this.toast = null;
-      this.emit();
-      this.onGhostHit?.();
+    if (this.ghost && this.kasas[0]) {
+      this.ghost.position.copy(this.kasas[0].position);
     }
+  }
 
+  private tickMimic(dt: number) {
+    if (this.mimics.length === 0) return;
+    const pl = this.yawObj.position;
+    const speed = WALK;
+    for (const g of this.mimics) {
+      const hx = Number(g.userData.homeX);
+      const hz = Number(g.userData.homeZ);
+      const d = Math.hypot(pl.x - g.position.x, pl.z - g.position.z);
+      g.visible = this.mode !== "play" || d < 28;
+      if (this.mode === "play" && !this.paused && !this.ghostHit && d < 10) {
+        const ang = Math.atan2(pl.x - g.position.x, pl.z - g.position.z);
+        g.position.x += Math.sin(ang) * speed * dt;
+        g.position.z += Math.cos(ang) * speed * dt;
+        g.position.y = this.surfaceY(g.position.x, g.position.z);
+        g.rotation.y = ang;
+        if (d < 1.05 && !this.debug.noclip) {
+          this.ghostHit = true;
+          this.emit();
+          this.onGhostHit?.("mimic");
+        }
+      } else {
+        g.position.x += (hx - g.position.x) * Math.min(1, dt * 1.4);
+        g.position.z += (hz - g.position.z) * Math.min(1, dt * 1.4);
+      }
+    }
+  }
+
+  private tickAka(dt: number) {
+    if (this.akas.length === 0) return;
+    const now = performance.now() * 0.001;
+    const pl = this.yawObj.position;
+    let touching = false;
+    for (const a of this.akas) {
+      const hop = Math.abs(Math.sin(now * 2.2 + a.phase)) * 0.04;
+      const p = a.group.position;
+      p.y = this.surfaceY(p.x, p.z) + hop;
+      const d = Math.hypot(pl.x - p.x, pl.z - p.z);
+      a.group.visible = this.mode !== "play" || d < 28;
+      if (this.mode === "play" && !this.paused && !this.ghostHit && d < 1.15 && !this.debug.noclip) {
+        touching = true;
+      }
+    }
+    if (touching) this.akaTouch += dt;
+    else this.akaTouch = 0;
+    if (this.akaTouch >= 1 && !this.ghostHit) {
+      this.ghostHit = true;
+      this.emit();
+      this.onGhostHit?.("aka");
+    }
+  }
+
+  private syncAka() {
+    const glow = this.mode === "play" && !this.lanternOn;
+    for (const a of this.akas) {
+      if (a.light) {
+        a.light.visible = glow;
+        a.light.intensity = glow ? 200 : 0;
+      }
+      for (const m of a.mats) {
+        m.opacity = glow ? 1 : 0.1;
+        m.transparent = true;
+        m.emissiveIntensity = glow ? 0.55 : 0.05;
+      }
+    }
+  }
+
+  private tickPipes() {
+    if (this.pipes.length === 0) return;
+    const t = performance.now() * 0.001;
+    const pl = this.yawObj.position;
+    for (const g of this.pipes) {
+      posePipeTaiso(g, t);
+      const d = Math.hypot(pl.x - g.position.x, pl.z - g.position.z);
+      g.visible = this.mode !== "play" || d < 28;
+    }
+  }
+
+  private tickYuki() {
+    if (this.yukis.length === 0) return;
+    const t = performance.now() * 0.001;
+    const pl = this.yawObj.position;
+    for (const g of this.yukis) {
+      posePipeTaiso(g, t);
+      const d = Math.hypot(pl.x - g.position.x, pl.z - g.position.z);
+      g.visible = this.mode !== "play" || d < 28;
+    }
+  }
+
+  private tickMeri() {
+    if (this.meris.length === 0) return;
+    const t = performance.now() * 0.001;
+    const pl = this.yawObj.position;
+    for (const g of this.meris) {
+      posePipeTaiso(g, t);
+      const d = Math.hypot(pl.x - g.position.x, pl.z - g.position.z);
+      g.visible = this.mode !== "play" || d < 28;
+    }
   }
 
   private syncRailGlow() {
@@ -979,7 +1210,13 @@ export class EchoesEngine {
     if (this.mode === "play") this.tickFlash(dt);
     if (this.portalSpin) this.portalSpin.rotation.z += dt * 0.35;
     this.tickGhost(dt);
+    this.tickMimic(dt);
+    this.tickAka(dt);
+    this.tickPipes();
+    this.tickYuki();
+    this.tickMeri();
     this.syncRailGlow();
+    this.syncAka();
     this.tickSouls(now);
 
 
@@ -1076,6 +1313,7 @@ export class EchoesEngine {
           x: p.x,
           z: p.z,
         });
+        this.spawnExtraKasa(5);
       } else if (d < 3.2 && !near) near = r;
     }
 
