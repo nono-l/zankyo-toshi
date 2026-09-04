@@ -5,7 +5,7 @@
 // @ts-nocheck
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
-import { createGhost, GHOST_CATALOG, setBagFace, posePipeTaiso, type GhostKind } from "@/game/ghosts";
+import { createGhost, GHOST_CATALOG, setBagFace, posePipeTaiso, poseMeri, type GhostKind } from "@/game/ghosts";
 
 export function GhostGallery({ onClose }: { onClose: () => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -73,15 +73,23 @@ export function GhostGallery({ onClose }: { onClose: () => void }) {
         faceI += 1;
         setBagFace(ghost, faceI);
       }
-      if (lastKind === "pipe" || lastKind === "yuki" || lastKind === "meri") {
+      if (lastKind === "pipe" || lastKind === "yuki") {
         posePipeTaiso(ghost, t);
         ghost.rotation.y = t * 0.35;
         ghost.position.y = 0;
         ghost.rotation.z = 0;
+        camera.lookAt(0, 0.75, 0);
+      } else if (lastKind === "meri") {
+        poseMeri(ghost, t);
+        ghost.rotation.y = Math.sin(t * 0.45) * 0.28;
+        ghost.position.y = 0;
+        ghost.rotation.z = 0;
+        camera.lookAt(0, 0.95, 0);
       } else {
         ghost.rotation.y = t * 0.65;
         ghost.position.y = Math.abs(Math.sin(t * 3.1)) * 0.14;
         ghost.rotation.z = Math.sin(t * 3.1) * 0.1;
+        camera.lookAt(0, 0.75, 0);
       }
       const w = canvas.clientWidth;
       const h = canvas.clientHeight;

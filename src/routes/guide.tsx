@@ -95,7 +95,7 @@ function Guide() {
         <section className="border-line mt-5 border-t pt-5">
           <h2 className="font-display text-lg">めりさん</h2>
           <p className="text-muted mt-2 text-sm leading-relaxed">
-            祠の側に立つ。紫のヴェールと緑の眼。罰は、まだない。図鑑の六番である。
+            祠の側に漂う。青いフードそのものが器である。顔はイラスト。罰は、まだない。図鑑の六番である。
           </p>
         </section>
 

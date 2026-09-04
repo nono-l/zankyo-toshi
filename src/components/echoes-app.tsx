@@ -270,6 +270,23 @@ export function EchoesApp() {
                 >
                   配信規約（ビデオポリシー）
                 </Link>
+                {isAdmin ? (
+                  <>
+                    <button
+                      type="button"
+                      className="btn-ghost hit hit-ui inline-flex h-11 shrink-0 items-center whitespace-nowrap px-4"
+                      onClick={() => setGhostGallery(true)}
+                    >
+                      ギャラリー
+                    </button>
+                    <Link
+                      to="/admin"
+                      className="btn-ghost hit hit-ui inline-flex h-11 shrink-0 items-center whitespace-nowrap px-4"
+                    >
+                      管理者追加
+                    </Link>
+                  </>
+                ) : null}
               </div>
             </div>
 

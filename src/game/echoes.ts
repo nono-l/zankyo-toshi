@@ -13,6 +13,7 @@ import {
   createAkamisoLite,
   createPipeYousei,
   posePipeTaiso,
+  poseMeri,
   createYukiOnna,
   createMeriSan,
 } from "./ghosts";
@@ -1084,7 +1085,7 @@ export class EchoesEngine {
     const t = performance.now() * 0.001;
     const pl = this.yawObj.position;
     for (const g of this.meris) {
-      posePipeTaiso(g, t);
+      poseMeri(g, t);
       const d = Math.hypot(pl.x - g.position.x, pl.z - g.position.z);
       g.visible = this.mode !== "play" || d < 28;
     }

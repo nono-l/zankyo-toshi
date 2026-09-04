@@ -48,7 +48,7 @@ export const GHOST_CATALOG: {
     kind: "meri",
     no: 6,
     name: "めりさん",
-    note: "祠の側に立つ。紫のヴェールと緑の眼。ゆきおんな流用。罰は、まだない。",
+    note: "祠の側に漂う。青いフードのおばけ。顔はイラスト。罰は、まだない。",
   },
 ];
 
@@ -553,26 +553,125 @@ export function createYukiOnna() {
   const hair = new THREE.Mesh(new THREE.SphereGeometry(0.24, 14, 12), hairC);
   hair.position.set(-0.02, 0.08, -0.04);
   hair.scale.set(1.15, 1.05, 1.05);
-  const card = faceCard("/ghosts/yuki-face.png", 0.62, 0.72, "yuki-face");
+  const card = faceCard("/ghosts/yuki-face.png?v=2", 0.58, 0.69, "yuki-face");
   card.position.set(0, 0.1, 0.2);
   head.add(hair, card);
   return g;
 }
 
+export function poseMeri(g: THREE.Object3D, t: number) {
+  // 口をカメラに向けたまま、裾だけが息をする。
+  const hips = g.getObjectByName("pipe-hips");
+  const armL = g.getObjectByName("pipe-arm-l");
+  const armR = g.getObjectByName("pipe-arm-r");
+  if (!hips) return;
+  const s = Math.sin(t * 1.1);
+  hips.position.y = 0.06 + s * 0.04;
+  hips.rotation.set(0, 0, Math.sin(t * 0.7) * 0.02);
+  if (armL) armL.rotation.set(0.05 + s * 0.06, 0, 0.08);
+  if (armR) armR.rotation.set(0.05 - s * 0.06, 0, -0.08);
+}
+
+function meriCloakGeo() {
+  // 絵のマント：首は細く、裾は広がる。
+  const pts = [
+    new THREE.Vector2(0.1, 0.02),
+    new THREE.Vector2(0.32, 0.08),
+    new THREE.Vector2(0.46, 0.2),
+    new THREE.Vector2(0.5, 0.4),
+    new THREE.Vector2(0.44, 0.62),
+    new THREE.Vector2(0.32, 0.82),
+    new THREE.Vector2(0.2, 0.96),
+  ];
+  return new THREE.LatheGeometry(pts, 48);
+}
+
+function meriHoodGeo(inset = 0) {
+  // 側面のC字をY回りに開き、正面を口にする。閉じた球にはしない。
+  const pts = [
+    new THREE.Vector2(0.22 - inset, 0.92),
+    new THREE.Vector2(0.44 - inset, 1.0),
+    new THREE.Vector2(0.54 - inset, 1.16),
+    new THREE.Vector2(0.52 - inset, 1.36),
+    new THREE.Vector2(0.34 - inset, 1.52),
+    new THREE.Vector2(0.12 - inset * 0.4, 1.48),
+    new THREE.Vector2(0.16 - inset * 0.3, 1.28),
+    new THREE.Vector2(0.26 - inset * 0.2, 1.1),
+  ].map((p) => new THREE.Vector2(Math.max(0.04, p.x), p.y));
+  const open = 1.95;
+  return new THREE.LatheGeometry(pts, 32, open / 2, Math.PI * 2 - open);
+}
+
 export function createMeriSan() {
-  const faceC = mat(0xfffdf8, { roughness: 0.48 });
-  const coat = mat(0x3a5bb8, { roughness: 0.55, emissive: 0x1a2a68, emissiveIntensity: 0.1 });
-  const coatDark = mat(0x2a3f8a, { roughness: 0.58 });
-  const shoeC = mat(0xf4f0ea, { roughness: 0.7 });
-  const hoodC = mat(0x5a4a88, { roughness: 0.72 });
-  const { g, head } = chibiBody(coat, coatDark, faceC, shoeC);
+  // 添付イラスト：口の開いた青フード、緑の眼、裾の広がるマント。
+  const skin = mat(0xecd4bc, { roughness: 0.48 });
+  const cloth = mat(0x5b688a, {
+    roughness: 0.58,
+    emissive: 0x1a2436,
+    emissiveIntensity: 0.12,
+    side: THREE.DoubleSide,
+  });
+  const lining = mat(0xd5dae4, {
+    roughness: 0.46,
+    side: THREE.DoubleSide,
+  });
+  const g = new THREE.Group();
   g.name = "meri-san";
   g.userData.kind = "meri";
-  const hood = new THREE.Mesh(new THREE.SphereGeometry(0.26, 14, 12), hoodC);
-  hood.position.set(0, 0.12, -0.04);
-  hood.scale.set(1.2, 0.95, 1.05);
-  const card = faceCard("/ghosts/meri-face.png", 0.78, 0.62, "meri-face");
-  card.position.set(0, 0.12, 0.22);
-  head.add(hood, card);
+
+  const hips = new THREE.Group();
+  hips.name = "pipe-hips";
+  hips.add(new THREE.Mesh(meriCloakGeo(), cloth));
+
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.1, 0.12, 12), skin);
+  neck.position.y = 0.98;
+  hips.add(neck);
+
+  const hood = new THREE.Mesh(meriHoodGeo(0), cloth);
+  const inner = new THREE.Mesh(meriHoodGeo(0.045), lining);
+  hips.add(hood, inner);
+
+  const head = new THREE.Group();
+  head.name = "pipe-head";
+  head.position.set(0, 1.22, 0.22);
+  const skull = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 14), skin);
+  skull.position.set(0, 0.02, -0.04);
+  skull.scale.set(1.05, 0.95, 0.9);
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(0.26, 0.022, 8, 24), lining);
+  rim.position.z = 0.02;
+  const card = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.46, 0.58),
+    new THREE.MeshBasicMaterial({
+      map: loadFace("/ghosts/meri-face.png?v=10"),
+      transparent: true,
+      alphaTest: 0.14,
+      toneMapped: false,
+      depthWrite: true,
+    }),
+  );
+  card.name = "meri-face";
+  card.position.z = 0.06;
+  const lamp = new THREE.PointLight(0xc8d6e8, 0.35, 2.8, 2);
+  lamp.name = "ghostLamp";
+  lamp.position.set(0, 0.05, 0.12);
+  lamp.visible = false;
+  head.add(skull, rim, card, lamp);
+
+  const torso = new THREE.Group();
+  torso.name = "pipe-torso";
+  const mkHand = (side: number) => {
+    const arm = new THREE.Group();
+    arm.name = side < 0 ? "pipe-arm-l" : "pipe-arm-r";
+    arm.position.set(side * 0.46, 0.5, 0.1);
+    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), skin);
+    arm.add(hand);
+    return arm;
+  };
+  torso.add(mkHand(-1), mkHand(1));
+
+  hips.add(head, torso);
+  g.add(hips);
   return g;
 }
+
+
