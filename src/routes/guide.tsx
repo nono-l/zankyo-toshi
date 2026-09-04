@@ -88,7 +88,7 @@ function Guide() {
         <section className="border-line mt-5 border-t pt-5">
           <h2 className="font-display text-lg">ゆきおんな</h2>
           <p className="text-muted mt-2 text-sm leading-relaxed">
-            屋根のない空の下に立つ。白髪と水色。顔はキャンバス。暇ならラジオ体操。罰は、まだない。
+            屋根のない空の下に立つ。白髪と淡い着物。顔はイラスト。暇ならラジオ体操。罰は、まだない。
           </p>
         </section>
 

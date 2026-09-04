@@ -42,7 +42,7 @@ export const GHOST_CATALOG: {
     kind: "yuki",
     no: 5,
     name: "ゆきおんな",
-    note: "開いた空の下に立つ。白髪・水色。顔はキャンバス。暇ならラジオ体操。罰は、まだない。",
+    note: "開いた空の下に立つ。白髪と淡い着物。顔はイラスト。暇ならラジオ体操。罰は、まだない。",
   },
   {
     kind: "meri",
@@ -471,57 +471,11 @@ export function posePipeTaiso(g: THREE.Object3D, t: number) {
   }
 }
 
-function yukiFaceTexture() {
-  const c = document.createElement("canvas");
-  c.width = 512;
-  c.height = 640;
-  const ctx = c.getContext("2d")!;
-  ctx.clearRect(0, 0, 512, 640);
-  const hair = "#efeae4";
-  const line = "#3a2c33";
-  const streak = "#1c1c20";
-  const skin = "#f6e7de";
-  const mint = "#5ad8cc";
-  ctx.fillStyle = hair;
-  ctx.beginPath();
-  ctx.ellipse(256, 250, 210, 230, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = skin;
-  ctx.beginPath();
-  ctx.ellipse(248, 310, 118, 138, 0.08, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = streak;
-  ctx.beginPath();
-  ctx.moveTo(250, 150);
-  ctx.bezierCurveTo(300, 140, 340, 180, 350, 280);
-  ctx.bezierCurveTo(340, 360, 300, 400, 280, 360);
-  ctx.bezierCurveTo(300, 240, 270, 180, 250, 150);
-  ctx.fill();
-  ctx.fillStyle = mint;
-  ctx.beginPath();
-  ctx.ellipse(207, 302, 20, 24, -0.15, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = "#fff";
-  ctx.beginPath();
-  ctx.ellipse(199, 292, 7, 9, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = line;
-  ctx.lineWidth = 4;
-  ctx.beginPath();
-  ctx.moveTo(228, 372);
-  ctx.quadraticCurveTo(250, 388, 278, 372);
-  ctx.stroke();
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.needsUpdate = true;
-  return tex;
-}
-
 function chibiBody(coat: THREE.Material, coatDark: THREE.Material, faceC: THREE.Material, shoeC: THREE.Material) {
   const g = new THREE.Group();
   const hips = new THREE.Group();
   hips.name = "pipe-hips";
-  const hem = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.22, 0.26), coatDark);
+  const hem = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.24, 0.28), coatDark);
   hem.position.y = 0.36;
   const shoeL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.07, 0.16), shoeC);
   shoeL.position.set(-0.1, 0.05, 0.02);
@@ -531,9 +485,11 @@ function chibiBody(coat: THREE.Material, coatDark: THREE.Material, faceC: THREE.
   const torso = new THREE.Group();
   torso.name = "pipe-torso";
   torso.position.y = 0.5;
-  const body = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.42, 0.24), coat);
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.44, 0.26), coat);
   body.position.y = 0.18;
-  torso.add(body);
+  const collar = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.07, 0.16), coatDark);
+  collar.position.set(0, 0.4, 0.07);
+  torso.add(body, collar);
   const armL = new THREE.Group();
   armL.name = "pipe-arm-l";
   armL.position.set(-0.24, 0.16, 0.06);
@@ -557,61 +513,66 @@ function chibiBody(coat: THREE.Material, coatDark: THREE.Material, faceC: THREE.
   return { g, head };
 }
 
-export function createYukiOnna() {
-  const faceC = mat(0xf6f3ef, { roughness: 0.48 });
-  const coat = mat(0x7aefd4, { roughness: 0.55, emissive: 0x3a8f7a, emissiveIntensity: 0.12 });
-  const coatDark = mat(0x5ed4bc, { roughness: 0.58 });
-  const shoeC = mat(0x2a333c, { roughness: 0.84 });
-  const { g, head } = chibiBody(coat, coatDark, faceC, shoeC);
-  g.name = "yuki-onna";
-  g.userData.kind = "yuki";
-  const face = new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 10), faceC);
+const faceTex = new Map<string, THREE.Texture>();
+function loadFace(url: string) {
+  const hit = faceTex.get(url);
+  if (hit) return hit;
+  const tex = new THREE.TextureLoader().load(url);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  faceTex.set(url, tex);
+  return tex;
+}
+
+function faceCard(url: string, w: number, h: number, name: string) {
   const card = new THREE.Mesh(
-    new THREE.PlaneGeometry(0.78, 0.98),
+    new THREE.PlaneGeometry(w, h),
     new THREE.MeshBasicMaterial({
-      map: yukiFaceTexture(),
+      map: loadFace(url),
       transparent: true,
+      alphaTest: 0.12,
       toneMapped: false,
       side: THREE.DoubleSide,
       depthWrite: false,
     }),
   );
-  card.name = "yuki-face";
-  card.position.set(0, 0.12, 0.2);
-  head.add(face, card);
-  return g;
+  card.name = name;
+  return card;
 }
 
-let meriMap: THREE.Texture | null = null;
-function meriFaceMap() {
-  if (meriMap) return meriMap;
-  meriMap = new THREE.TextureLoader().load("/ghosts/meri-face.png");
-  meriMap.colorSpace = THREE.SRGBColorSpace;
-  meriMap.anisotropy = 4;
-  return meriMap;
+export function createYukiOnna() {
+  // 白髪は紙と同色なのでキー抜きできない。顔まわりを楕円で切り、残りは立体の髪。
+  const faceC = mat(0xf6e7de, { roughness: 0.48 });
+  const coat = mat(0xd5e2d4, { roughness: 0.62, emissive: 0x8aa890, emissiveIntensity: 0.06 });
+  const coatDark = mat(0xb7c8b6, { roughness: 0.64 });
+  const shoeC = mat(0xf4f0ea, { roughness: 0.7 });
+  const hairC = mat(0xf2eee8, { roughness: 0.78 });
+  const { g, head } = chibiBody(coat, coatDark, faceC, shoeC);
+  g.name = "yuki-onna";
+  g.userData.kind = "yuki";
+  const hair = new THREE.Mesh(new THREE.SphereGeometry(0.24, 14, 12), hairC);
+  hair.position.set(-0.02, 0.08, -0.04);
+  hair.scale.set(1.15, 1.05, 1.05);
+  const card = faceCard("/ghosts/yuki-face.png", 0.62, 0.72, "yuki-face");
+  card.position.set(0, 0.1, 0.2);
+  head.add(hair, card);
+  return g;
 }
 
 export function createMeriSan() {
   const faceC = mat(0xfffdf8, { roughness: 0.48 });
-  const coat = mat(0x3a5bb8, { roughness: 0.55, emissive: 0x1a2a68, emissiveIntensity: 0.12 });
+  const coat = mat(0x3a5bb8, { roughness: 0.55, emissive: 0x1a2a68, emissiveIntensity: 0.1 });
   const coatDark = mat(0x2a3f8a, { roughness: 0.58 });
-  const shoeC = mat(0x2a2a62, { roughness: 0.84 });
+  const shoeC = mat(0xf4f0ea, { roughness: 0.7 });
+  const hoodC = mat(0x5a4a88, { roughness: 0.72 });
   const { g, head } = chibiBody(coat, coatDark, faceC, shoeC);
   g.name = "meri-san";
   g.userData.kind = "meri";
-  const face = new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 10), faceC);
-  const card = new THREE.Mesh(
-    new THREE.PlaneGeometry(0.9, 0.78),
-    new THREE.MeshBasicMaterial({
-      map: meriFaceMap(),
-      transparent: true,
-      toneMapped: false,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-    }),
-  );
-  card.name = "meri-face";
-  card.position.set(0, 0.14, 0.2);
-  head.add(face, card);
+  const hood = new THREE.Mesh(new THREE.SphereGeometry(0.26, 14, 12), hoodC);
+  hood.position.set(0, 0.12, -0.04);
+  hood.scale.set(1.2, 0.95, 1.05);
+  const card = faceCard("/ghosts/meri-face.png", 0.78, 0.62, "meri-face");
+  card.position.set(0, 0.12, 0.22);
+  head.add(hood, card);
   return g;
 }
