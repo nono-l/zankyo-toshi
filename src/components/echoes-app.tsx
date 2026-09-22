@@ -13,6 +13,7 @@ import { getIdentity } from "@/lib/admin";
 import { getProfile } from "@/lib/profile";
 import { getLightSettings, saveLightSettings } from "@/lib/settings";
 import { GhostGallery } from "@/components/ghost-gallery";
+import { HowToHint, HowToPanel, HowToToggle, useHowToPrefs } from "@/components/how-to";
 
 const DEFAULT_SEED = "残響-7f3a";
 const SEED_HEAD = ["残響", "灰", "霧", "沈水", "輪郭", "観測", "基壇", "無音", "塩", "錆", "凍土", "夜半"] as const;
@@ -68,6 +69,7 @@ export function EchoesApp() {
   >(null);
   const [ghostFarewell, setGhostFarewell] = useState<"kasa" | "mimic" | "aka" | null>(null);
   const [ghostGallery, setGhostGallery] = useState(false);
+  const { howTo, device, setHowTo, setDevice } = useHowToPrefs();
   const pendingRef = useRef<FindInput[]>([]);
   pendingRef.current = pending;
   const emergencyExitRef = useRef<(reason?: "emergency" | "ghost" | "mimic") => void>(() => {});
@@ -252,24 +254,16 @@ export function EchoesApp() {
           />
         )}
         {phase === "title" && (
-          <div className="flex h-full flex-col justify-end px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(1.25rem,env(safe-area-inset-top))]">
-            <div className="relative z-10 mb-4 flex flex-col gap-2">
-              <div className="flex justify-end">
-                <AuthChip isPending={isPending} user={user} />
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Link
-                  to="/guide"
-                  className="btn-ghost hit hit-ui inline-flex h-11 shrink-0 items-center whitespace-nowrap px-4"
-                >
-                  遊び方
-                </Link>
+          <div className="title-shell">
+            <div className="title-top">
+              <div className="title-nav">
                 <Link
                   to="/terms"
                   className="btn-ghost hit hit-ui inline-flex h-11 shrink-0 items-center whitespace-nowrap px-4"
                 >
                   配信規約（ビデオポリシー）
                 </Link>
+                <HowToToggle on={howTo} onChange={setHowTo} />
                 {isAdmin ? (
                   <>
                     <button
@@ -288,47 +282,50 @@ export function EchoesApp() {
                   </>
                 ) : null}
               </div>
+              <AuthChip isPending={isPending} user={user} />
             </div>
 
-
-            <div className="panel hit max-w-lg reveal p-6 sm:p-8">
-              <p className="text-muted mb-2 text-xs tracking-[0.28em]">ECHOES OF COLLAPSE</p>
-              <h1 className="font-display text-[clamp(2rem,8vw,3.2rem)] leading-tight font-medium tracking-tight">
-                残響都市
-              </h1>
-              <p className="text-muted mt-3 max-w-sm text-sm leading-relaxed">
-                文明の文法が先にあり、廃墟はその劣化結果である。シードごとに滅び方が変わる。
-              </p>
-              <label className="text-subtle mt-5 mb-1 block text-xs tracking-wider">シード</label>
-              <input
-                className="seed-input"
-                value={seed}
-                onChange={(e) => {
-                  setSeed(e.target.value);
-                  engineRef.current?.regenerate(e.target.value.trim() || DEFAULT_SEED);
-                }}
-                enterKeyHint="go"
-                autoCapitalize="off"
-                autoCorrect="off"
-              />
-              {hud && (
-                <p className="text-muted mt-3 text-sm">
-                  {hud.civName} / {hud.landmarkName}
+            <div className="title-stage">
+              {howTo ? <HowToPanel device={device} onDevice={setDevice} /> : null}
+              <div className="panel hit title-entry reveal p-6 sm:p-8 lg:p-10">
+                <p className="text-muted mb-2 text-xs tracking-[0.28em]">ECHOES OF COLLAPSE</p>
+                <h1 className="font-display text-[clamp(2rem,5vw,3.8rem)] leading-tight font-medium tracking-tight">
+                  残響都市
+                </h1>
+                <p className="text-muted mt-3 max-w-sm text-sm leading-relaxed">
+                  文明の文法が先にあり、廃墟はその劣化結果である。シードごとに滅び方が変わる。
                 </p>
-              )}
-              <button type="button" className="btn-primary mt-5 w-full" onClick={begin}>
-                踏入する
-              </button>
-              <p className="text-subtle mt-3 text-xs leading-relaxed">
-                {user
-                  ? "入口の光に触れて出れば記録が残る。触れずに戻れば緊急脱出となり、拾った断片は没収される。"
-                  : "ID連携すると、入口から出た断片が日付と場所とともに残る。"}
-              </p>
-              <p className="text-subtle mt-2 text-xs leading-relaxed">
-                六十秒に一度だけ、測量の閃光が遠方の輪郭を一秒返す。影の長さで時刻を決めた文明の、残った規格だ。
-              </p>
+                <label className="text-subtle mt-5 mb-1 block text-xs tracking-wider">シード</label>
+                <input
+                  className="seed-input"
+                  value={seed}
+                  onChange={(e) => {
+                    setSeed(e.target.value);
+                    engineRef.current?.regenerate(e.target.value.trim() || DEFAULT_SEED);
+                  }}
+                  enterKeyHint="go"
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                />
+                {hud && (
+                  <p className="text-muted mt-3 text-sm">
+                    {hud.civName} / {hud.landmarkName}
+                  </p>
+                )}
+                <button type="button" className="btn-primary mt-5 w-full" onClick={begin}>
+                  踏入する
+                </button>
+                <p className="text-subtle mt-3 text-xs leading-relaxed">
+                  {user
+                    ? "入口の光に触れて出れば記録が残る。触れずに戻れば緊急脱出となり、拾った断片は没収される。"
+                    : "ID連携すると、入口から出た断片が日付と場所とともに残る。"}
+                </p>
+                <p className="text-subtle mt-2 text-xs leading-relaxed">
+                  六十秒に一度だけ、測量の閃光が遠方の輪郭を一秒返す。影の長さで時刻を決めた文明の、残った規格だ。
+                </p>
+              </div>
             </div>
-            <p className="text-subtle mt-3 self-end text-xs tracking-wide">
+            <p className="text-subtle title-legal text-xs tracking-wide">
               電気通信事業者　届出済
             </p>
           </div>
@@ -382,6 +379,7 @@ export function EchoesApp() {
               {hud.toast && (
                 <p className="font-display mt-2 max-w-xs text-sm leading-snug">{hud.toast}</p>
               )}
+              {howTo && device ? <HowToHint device={device} /> : null}
               {hud.debug.showPos && (
                 <p className="text-subtle mt-2 font-mono text-xs">
                   {hud.posX.toFixed(1)}, {hud.posZ.toFixed(1)}
@@ -402,7 +400,7 @@ export function EchoesApp() {
             </div>
 
             <div className="relative z-10 mt-auto flex items-end justify-between px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
-              <Joystick x={stick.x} y={stick.y} onChange={onStick} />
+              {device === "pc" ? <div /> : <Joystick x={stick.x} y={stick.y} onChange={onStick} />}
               <div className="mb-3 flex flex-col items-center gap-2">
                 <button
                   type="button"

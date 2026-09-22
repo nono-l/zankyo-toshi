@@ -66,6 +66,7 @@ const WALK = 3.15;
 const SPRINT = 4.85;
 const GHOST_SPEED = 3.7;
 const GHOST_HIT = 1.12;
+const MIMIC_LEASH = 6;
 const LOOK = 0.00235;
 const PORTAL_R = 1.9;
 const FLASH_DUR = 1;
@@ -1003,8 +1004,16 @@ export class EchoesEngine {
       g.visible = this.mode !== "play" || d < 28;
       if (this.mode === "play" && !this.paused && !this.ghostHit && d < 10) {
         const ang = Math.atan2(pl.x - g.position.x, pl.z - g.position.z);
-        g.position.x += Math.sin(ang) * speed * dt;
-        g.position.z += Math.cos(ang) * speed * dt;
+        let nx = g.position.x + Math.sin(ang) * speed * dt;
+        let nz = g.position.z + Math.cos(ang) * speed * dt;
+        const fromHome = Math.hypot(nx - hx, nz - hz);
+        if (fromHome > MIMIC_LEASH) {
+          const s = MIMIC_LEASH / fromHome;
+          nx = hx + (nx - hx) * s;
+          nz = hz + (nz - hz) * s;
+        }
+        g.position.x = nx;
+        g.position.z = nz;
         g.position.y = this.surfaceY(g.position.x, g.position.z);
         g.rotation.y = ang;
         if (d < 1.05 && !this.debug.noclip) {
@@ -1086,6 +1095,7 @@ export class EchoesEngine {
     const pl = this.yawObj.position;
     for (const g of this.meris) {
       poseMeri(g, t);
+      g.rotation.y = Math.atan2(pl.x - g.position.x, pl.z - g.position.z);
       const d = Math.hypot(pl.x - g.position.x, pl.z - g.position.z);
       g.visible = this.mode !== "play" || d < 28;
     }

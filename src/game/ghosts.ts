@@ -24,7 +24,7 @@ export const GHOST_CATALOG: {
     kind: "mimic",
     no: 2,
     name: "ミミックさん",
-    note: "壁際に三十。袋の顔は顔文字で個体差。十メートルだけ寄ってくる。触れればハッピーエンド。",
+    note: "壁際に三十。袋の顔は顔文字で個体差。初期位置から六メートルまでしか歩けない。触れればハッピーエンド。",
   },
   {
     kind: "aka",
@@ -560,61 +560,51 @@ export function createYukiOnna() {
 }
 
 export function poseMeri(g: THREE.Object3D, t: number) {
-  // 口をカメラに向けたまま、裾だけが息をする。
   const hips = g.getObjectByName("pipe-hips");
   const armL = g.getObjectByName("pipe-arm-l");
   const armR = g.getObjectByName("pipe-arm-r");
   if (!hips) return;
   const s = Math.sin(t * 1.1);
-  hips.position.y = 0.06 + s * 0.04;
-  hips.rotation.set(0, 0, Math.sin(t * 0.7) * 0.02);
-  if (armL) armL.rotation.set(0.05 + s * 0.06, 0, 0.08);
-  if (armR) armR.rotation.set(0.05 - s * 0.06, 0, -0.08);
+  hips.position.y = 0.05 + s * 0.035;
+  if (armL) armL.rotation.z = 0.06 + s * 0.05;
+  if (armR) armR.rotation.z = -0.06 - s * 0.05;
 }
 
 function meriCloakGeo() {
-  // 絵のマント：首は細く、裾は広がる。
   const pts = [
     new THREE.Vector2(0.1, 0.02),
-    new THREE.Vector2(0.32, 0.08),
-    new THREE.Vector2(0.46, 0.2),
-    new THREE.Vector2(0.5, 0.4),
-    new THREE.Vector2(0.44, 0.62),
-    new THREE.Vector2(0.32, 0.82),
-    new THREE.Vector2(0.2, 0.96),
+    new THREE.Vector2(0.28, 0.08),
+    new THREE.Vector2(0.38, 0.22),
+    new THREE.Vector2(0.4, 0.44),
+    new THREE.Vector2(0.32, 0.66),
+    new THREE.Vector2(0.22, 0.84),
+    new THREE.Vector2(0.16, 0.96),
   ];
   return new THREE.LatheGeometry(pts, 48);
 }
 
-function meriHoodGeo(inset = 0) {
-  // 側面のC字をY回りに開き、正面を口にする。閉じた球にはしない。
-  const pts = [
-    new THREE.Vector2(0.22 - inset, 0.92),
-    new THREE.Vector2(0.44 - inset, 1.0),
-    new THREE.Vector2(0.54 - inset, 1.16),
-    new THREE.Vector2(0.52 - inset, 1.36),
-    new THREE.Vector2(0.34 - inset, 1.52),
-    new THREE.Vector2(0.12 - inset * 0.4, 1.48),
-    new THREE.Vector2(0.16 - inset * 0.3, 1.28),
-    new THREE.Vector2(0.26 - inset * 0.2, 1.1),
-  ].map((p) => new THREE.Vector2(Math.max(0.04, p.x), p.y));
-  const open = 1.95;
-  return new THREE.LatheGeometry(pts, 32, open / 2, Math.PI * 2 - open);
+function meriHoodShell(open: number) {
+  // 後ろから頭を包む。切断面は唇のトーラスで隠す。
+  return new THREE.SphereGeometry(
+    0.38,
+    48,
+    36,
+    Math.PI / 2 + open / 2,
+    Math.PI * 2 - open,
+    0,
+    Math.PI * 0.82,
+  );
 }
 
 export function createMeriSan() {
-  // 添付イラスト：口の開いた青フード、緑の眼、裾の広がるマント。
+  // 布の頭巾。切った球の兜にはしない。口のほとんどを顔が占める。
   const skin = mat(0xecd4bc, { roughness: 0.48 });
-  const cloth = mat(0x5b688a, {
-    roughness: 0.58,
-    emissive: 0x1a2436,
-    emissiveIntensity: 0.12,
-    side: THREE.DoubleSide,
+  const cloth = mat(0x6a7d9e, {
+    roughness: 0.56,
+    emissive: 0x1c2838,
+    emissiveIntensity: 0.1,
   });
-  const lining = mat(0xd5dae4, {
-    roughness: 0.46,
-    side: THREE.DoubleSide,
-  });
+  const lining = mat(0xc5cad4, { roughness: 0.45 });
   const g = new THREE.Group();
   g.name = "meri-san";
   g.userData.kind = "meri";
@@ -623,48 +613,68 @@ export function createMeriSan() {
   hips.name = "pipe-hips";
   hips.add(new THREE.Mesh(meriCloakGeo(), cloth));
 
-  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.1, 0.12, 12), skin);
+  const yoke = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 12), cloth);
+  yoke.position.set(0, 0.94, -0.02);
+  yoke.scale.set(1.35, 0.42, 1.05);
+  hips.add(yoke);
+
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.08, 0.08, 12), skin);
   neck.position.y = 0.98;
   hips.add(neck);
 
-  const hood = new THREE.Mesh(meriHoodGeo(0), cloth);
-  const inner = new THREE.Mesh(meriHoodGeo(0.045), lining);
-  hips.add(hood, inner);
-
   const head = new THREE.Group();
   head.name = "pipe-head";
-  head.position.set(0, 1.22, 0.22);
-  const skull = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 14), skin);
+  head.position.set(0, 1.14, 0);
+
+  const skull = new THREE.Mesh(new THREE.SphereGeometry(0.15, 16, 14), skin);
   skull.position.set(0, 0.02, -0.04);
-  skull.scale.set(1.05, 0.95, 0.9);
-  const rim = new THREE.Mesh(new THREE.TorusGeometry(0.26, 0.022, 8, 24), lining);
-  rim.position.z = 0.02;
+
+  const open = 1.22;
+  const hood = new THREE.Mesh(meriHoodShell(open), cloth);
+  hood.position.set(0, 0.1, -0.1);
+  hood.scale.set(1.22, 1.28, 1.16);
+
+  const lip = new THREE.Mesh(new THREE.TorusGeometry(0.23, 0.04, 12, 36), cloth);
+  lip.position.set(0, 0.06, 0.16);
+  lip.scale.set(1.05, 1.18, 1);
+  const stitch = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.012, 8, 36), lining);
+  stitch.position.set(0, 0.06, 0.175);
+  stitch.scale.set(1.05, 1.18, 1);
+
+  const drape = (side: number) => {
+    const m = new THREE.Mesh(new THREE.SphereGeometry(0.15, 16, 12), cloth);
+    m.position.set(side * 0.2, -0.02, 0.06);
+    m.scale.set(0.55, 1.05, 0.5);
+    return m;
+  };
+
   const card = new THREE.Mesh(
-    new THREE.PlaneGeometry(0.46, 0.58),
+    new THREE.PlaneGeometry(0.4, 0.5),
     new THREE.MeshBasicMaterial({
-      map: loadFace("/ghosts/meri-face.png?v=10"),
+      map: loadFace("/ghosts/meri-face.png?v=11"),
       transparent: true,
-      alphaTest: 0.14,
+      alphaTest: 0.08,
       toneMapped: false,
       depthWrite: true,
+      side: THREE.DoubleSide,
     }),
   );
   card.name = "meri-face";
-  card.position.z = 0.06;
-  const lamp = new THREE.PointLight(0xc8d6e8, 0.35, 2.8, 2);
+  card.position.set(0, 0.05, 0.19);
+
+  const lamp = new THREE.PointLight(0xc8d6e8, 0.28, 2.4, 2);
   lamp.name = "ghostLamp";
-  lamp.position.set(0, 0.05, 0.12);
+  lamp.position.set(0, 0.06, 0.08);
   lamp.visible = false;
-  head.add(skull, rim, card, lamp);
+  head.add(skull, hood, lip, stitch, drape(-1), drape(1), card, lamp);
 
   const torso = new THREE.Group();
   torso.name = "pipe-torso";
   const mkHand = (side: number) => {
     const arm = new THREE.Group();
     arm.name = side < 0 ? "pipe-arm-l" : "pipe-arm-r";
-    arm.position.set(side * 0.46, 0.5, 0.1);
-    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), skin);
-    arm.add(hand);
+    arm.position.set(side * 0.36, 0.46, 0.1);
+    arm.add(new THREE.Mesh(new THREE.SphereGeometry(0.048, 10, 8), skin));
     return arm;
   };
   torso.add(mkHand(-1), mkHand(1));

@@ -115,7 +115,38 @@
   pointer-events: auto;
 }
 
+.how-switch {
+  position: relative;
+  display: inline-block;
+  width: 2.4rem;
+  height: 1.3rem;
+  flex-shrink: 0;
+  border-radius: 999px;
+  border: 1px solid var(--color-line);
+  background: var(--color-elevated);
+}
 
+.how-switch[data-on="true"] {
+  background: var(--color-accent);
+  border-color: transparent;
+}
+
+.how-switch > span {
+  position: absolute;
+  top: 0.12rem;
+  left: 0.12rem;
+  display: block;
+  width: 0.95rem;
+  height: 0.95rem;
+  border-radius: 999px;
+  background: var(--color-muted);
+  transition: transform 160ms ease, background-color 160ms ease;
+}
+
+.how-switch[data-on="true"] > span {
+  background: var(--color-accent-fg);
+  transform: translateX(1.05rem);
+}
 
 .stick-base {
   width: 112px;
@@ -138,9 +169,126 @@
   transform: translate(-50%, -50%);
 }
 
+.title-shell {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  padding: max(1.25rem, env(safe-area-inset-top)) 1.25rem max(1.5rem, env(safe-area-inset-bottom));
+}
+
+.title-top {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.title-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.title-stage {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.title-howto {
+  max-height: 42dvh;
+  max-width: 32rem;
+  overflow: auto;
+}
+
+.title-entry {
+  max-width: 32rem;
+}
+
+.title-legal {
+  align-self: flex-end;
+  margin-top: 0.75rem;
+}
+
+@media (min-width: 56rem) {
+  .title-shell {
+    padding: 1.75rem 2.5rem 2rem;
+  }
+
+  .title-stage {
+    flex-direction: row;
+    align-items: stretch;
+    justify-content: space-between;
+    gap: 3rem;
+    margin-top: 1.75rem;
+  }
+
+  .title-howto {
+    display: flex;
+    max-height: none;
+    max-width: 26rem;
+    flex: 1 1 18rem;
+    flex-direction: column;
+    align-self: stretch;
+    overflow: visible;
+  }
+
+  .title-entry {
+    width: min(34rem, 46vw);
+    max-width: 34rem;
+    margin-left: auto;
+    align-self: flex-end;
+  }
+
+  .title-howto .how-keys {
+    display: grid;
+    grid-template-columns: 4.75rem 1fr;
+    gap: 0.85rem 1.25rem;
+    margin-top: 1.1rem;
+  }
+
+  .title-howto .how-keys > div {
+    display: contents;
+  }
+
+  .title-howto .how-keys dt,
+  .title-howto .how-keys dd {
+    margin: 0;
+  }
+}
+
+@media (min-width: 80rem) {
+  .title-shell {
+    padding: 2.25rem 3.5rem 2.5rem;
+  }
+
+  .title-stage {
+    gap: 4.5rem;
+  }
+
+  .title-howto {
+    max-width: 30rem;
+  }
+
+  .title-entry {
+    width: min(36rem, 42vw);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .reveal {
     animation: none !important;
+  }
+
+  .how-switch > span {
+    transition: none;
   }
 }
 

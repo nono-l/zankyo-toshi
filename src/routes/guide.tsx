@@ -67,7 +67,7 @@ function Guide() {
         <section className="border-line mt-5 border-t pt-5">
           <h2 className="font-display text-lg">ミミックさん</h2>
           <p className="text-muted mt-2 text-sm leading-relaxed">
-            壁際に三十。十メートルだけ同じ速さで寄ってくる。触れればハッピーエンド。記録には、ミミックさんに捕まった、と残る。
+            壁際に三十。寄ってくるが、初期位置から六メートルまでしか歩けない。触れればハッピーエンド。記録には、ミミックさんに捕まった、と残る。
           </p>
         </section>
 
